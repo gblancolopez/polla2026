@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚽ Polla Mundial FIFA 2026</title>
+<style>
+:root{
+  --azul:#1d3557;--azul2:#457b9d;--azul-cl:#dbeafe;
+  --verde:#2d6a4f;--verde-cl:#d8f3dc;--verde-dk:#1b4332;
+  --rojo:#c0392b;--rojo-cl:#fde8ea;
+  --ambar:#b45309;--ambar-cl:#fef3c7;
+  --gris:#6b7280;--gris-cl:#f3f4f6;--gris-md:#e5e7eb;
+  --blanco:#fff;--negro:#111827;
+  --r:10px;--r-sm:6px;
+  --sombra:0 1px 4px rgba(0,0,0,.12);
+  --fuente:'Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--fuente);background:#eef2f7;color:var(--negro);min-height:100vh}
+.header{background:var(--azul);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.header h1{font-size:15px;font-weight:700;flex:1}
+.huser{font-size:12px;opacity:.9;display:flex;align-items:center;gap:6px}
+.nav{background:#fff;border-bottom:1px solid var(--gris-md);overflow-x:auto;display:flex;white-space:nowrap;position:sticky;top:48px;z-index:99}
+.nb{padding:10px 14px;font-size:13px;font-weight:600;border:none;background:transparent;cursor:pointer;color:var(--gris);border-bottom:3px solid transparent;transition:all .15s}
+.nb.active{color:var(--azul);border-bottom-color:var(--azul)}.nb:hover{background:var(--gris-cl)}
+.pg{display:none;padding:12px;max-width:720px;margin:0 auto}.pg.active{display:block}
+.card{background:#fff;border-radius:var(--r);box-shadow:var(--sombra);padding:16px;margin-bottom:12px}
+.ct{font-size:15px;font-weight:700;color:var(--azul);margin-bottom:12px}
+input[type=text],input[type=password],select{width:100%;padding:9px 12px;border:1.5px solid var(--gris-md);border-radius:var(--r-sm);font-size:14px;font-family:var(--fuente);background:#fff;color:var(--negro);transition:border-color .15s}
+input:focus,select:focus{outline:none;border-color:var(--azul2)}
+.lbl{font-size:11px;font-weight:700;color:var(--gris);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+.ig{margin-bottom:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--r-sm);font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all .15s;font-family:var(--fuente)}
+.btn-azul{background:var(--azul);color:#fff}.btn-azul:hover{background:#254470}
+.btn-verde{background:var(--verde);color:#fff}.btn-verde:hover{background:var(--verde-dk)}
+.btn-rojo{background:var(--rojo);color:#fff}.btn-rojo:hover{opacity:.85}
+.btn-gris{background:var(--gris-cl);color:var(--negro);border:1px solid var(--gris-md)}.btn-gris:hover{background:var(--gris-md)}
+.btn:disabled{opacity:.45;cursor:not-allowed}.btn-full{width:100%;justify-content:center}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700}
+.b-verde{background:var(--verde-cl);color:var(--verde-dk)}.b-azul{background:var(--azul-cl);color:#1e40af}
+.b-rojo{background:var(--rojo-cl);color:#991b1b}.b-ambar{background:var(--ambar-cl);color:var(--ambar)}
+.b-gris{background:var(--gris-cl);color:var(--gris)}.b-oro{background:#fef9c3;color:#713f12}
+.alert{padding:10px 14px;border-radius:var(--r-sm);font-size:13px;margin-bottom:10px;line-height:1.5}
+.a-info{background:var(--azul-cl);color:#1e40af;border-left:3px solid #3b82f6}
+.a-warn{background:var(--ambar-cl);color:var(--ambar);border-left:3px solid #f59e0b}
+.a-ok{background:var(--verde-cl);color:var(--verde-dk);border-left:3px solid var(--verde)}
+.a-err{background:var(--rojo-cl);color:#991b1b;border-left:3px solid var(--rojo)}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:var(--r);padding:24px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto}
+.modal h2{font-size:17px;font-weight:700;color:var(--azul);margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:6px 8px;color:var(--gris);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--gris-md);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--gris-cl);vertical-align:middle}
+tr:last-child td{border-bottom:none}.tc{text-align:center}
+.gtabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+.gtab{padding:4px 10px;border-radius:var(--r-sm);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--gris-md);background:#fff;color:var(--gris);transition:all .15s}
+.gtab.active{background:var(--azul);color:#fff;border-color:var(--azul)}
+.match-row{display:flex;align-items:center;gap:5px;padding:5px 0;border-bottom:1px solid var(--gris-cl)}
+.match-row:last-child{border-bottom:none}
+.eq{flex:1;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.eq.r{text-align:right}
+.sinp{width:34px;height:30px;text-align:center;border:1.5px solid var(--gris-md);border-radius:var(--r-sm);font-size:14px;font-weight:700;background:var(--gris-cl);color:var(--negro);padding:0;font-family:var(--fuente)}
+.sinp:focus{outline:none;border-color:var(--azul2);background:#fff}
+.sinp:disabled{background:var(--gris-cl);color:var(--gris);cursor:not-allowed}
+.sdash{color:var(--gris);font-weight:700}.sval{width:34px;height:30px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.tviva{font-size:12px;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--gris-md)}
+.tviva th{background:var(--gris-cl);padding:4px 6px}.tviva td{padding:4px 6px}
+.p1{color:var(--verde-dk);font-weight:700}.p2{color:#1e40af;font-weight:700}.p3{color:var(--ambar);font-weight:700}
+.dg-p{color:var(--verde)}.dg-n{color:var(--rojo)}
+.rrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--gris-cl)}
+.rrow:last-child{border-bottom:none}
+.rnum{font-size:17px;font-weight:800;width:26px;color:var(--gris);flex-shrink:0}
+.r1 .rnum{color:#b45309}.r2 .rnum{color:#6b7280}.r3 .rnum{color:#92400e}
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+.flexi{display:flex;align-items:center;gap:8px}.f1{flex:1}
+.pcard{display:flex;align-items:center;gap:10px;padding:10px;border:1.5px solid var(--gris-md);border-radius:var(--r-sm);cursor:pointer;transition:all .15s;margin-bottom:6px;background:#fff}
+.pcard:hover{border-color:var(--azul2);background:#f0f7ff}
+.locked{display:flex;align-items:center;gap:8px;background:var(--ambar-cl);color:var(--ambar);padding:8px 12px;border-radius:var(--r-sm);font-size:12px;font-weight:700;margin-bottom:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.scard{background:#fff;border-radius:var(--r-sm);padding:10px;text-align:center;box-shadow:var(--sombra)}
+.sv{font-size:20px;font-weight:800}.sl{font-size:10px;color:var(--gris);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.divider{border:none;border-top:1px solid var(--gris-md);margin:12px 0}
+.step{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px;font-size:13px;line-height:1.5}
+.sn{background:var(--azul);color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;font-size:10.5px;overflow-x:auto;line-height:1.6;margin:6px 0;white-space:pre}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.dot-ok{background:var(--verde)}.dot-err{background:var(--rojo)}.dot-warn{background:#f59e0b}
+@media(max-width:480px){.grid4{grid-template-columns:repeat(2,1fr)}.eq{font-size:11px}}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <span style="font-size:20px">⚽</span>
+  <h1>Polla Mundial FIFA 2026</h1>
+  <div class="huser" id="huser"></div>
+</header>
+
+<nav class="nav">
+  <button class="nb active" onclick="irA('ranking',this)">🏆 Clasificación</button>
+  <button class="nb" onclick="irA('pronosticos',this)">📝 Mis pronósticos</button>
+  <button class="nb" onclick="irA('vertodos',this)">👥 Ver todos</button>
+  <button class="nb" onclick="irA('admin',this)">⚙️ Admin</button>
+</nav>
+
+<main>
+
+<!-- ════ CLASIFICACIÓN ════ -->
+<div id="pg-ranking" class="pg active">
+  <div class="grid4">
+    <div class="scard"><div class="sv" style="color:#b45309">5</div><div class="sl">Marcador exacto</div></div>
+    <div class="scard"><div class="sv" style="color:var(--azul2)">2</div><div class="sl">Ganador/empate</div></div>
+    <div class="scard"><div class="sv" style="color:var(--verde)">3</div><div class="sl">Posición exacta grupo</div></div>
+    <div class="scard"><div class="sv" style="color:var(--ambar)">2</div><div class="sl">Top-3 / Mejor 3.º</div></div>
+  </div>
+  <div class="card">
+    <div class="flexi" style="margin-bottom:12px">
+      <span class="ct" style="margin:0">Clasificación general</span>
+      <span class="badge b-gris" id="badge-np">0 participantes</span>
+    </div>
+    <div id="ranking-lista"><div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">Cargando...</div></div>
+  </div>
+  <div id="estado-backend"></div>
+</div>
+
+<!-- ════ PRONÓSTICOS ════ -->
+<div id="pg-pronosticos" class="pg">
+  <div id="pron-login"></div>
+  <div id="pron-form" style="display:none"></div>
+</div>
+
+<!-- ════ VER TODOS ════ -->
+<div id="pg-vertodos" class="pg">
+  <div id="vt-content"><div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">Cargando...</div></div>
+</div>
+
+<!-- ════ ADMIN ════ -->
+<div id="pg-admin" class="pg">
+  <div id="admin-login-wrap">
+    <div class="card">
+      <div class="ct">⚙️ Panel de administrador</div>
+      <div class="alert a-info" style="margin-bottom:12px">
+        Solo el administrador accede a este panel. Introduce la contraseña para continuar.<br>
+        <strong>Contraseña por defecto:</strong> <code style="background:var(--gris-cl);padding:1px 5px;border-radius:4px">admin2026</code>
+      </div>
+      <div class="ig"><div class="lbl">Contraseña</div>
+        <input type="password" id="apass" placeholder="Contraseña..." onkeydown="if(event.key==='Enter')loginAdmin()">
+      </div>
+      <button class="btn btn-azul btn-full" style="margin-top:8px" onclick="loginAdmin()">Entrar al panel</button>
+      <div id="apass-err" class="alert a-err" style="display:none;margin-top:8px">Contraseña incorrecta</div>
+    </div>
+    <div class="card">
+      <div class="ct">🔧 Conexión a base de datos compartida</div>
+      <div id="config-status"><div class="flexi" style="gap:6px;font-size:13px;margin-bottom:8px"><span class="dot dot-warn"></span> Sin configurar</div></div>
+      <p style="font-size:12px;color:var(--gris);margin-bottom:10px">Para que todos puedan participar desde sus celulares, necesitas conectar una base de datos gratuita en Google. El botón de abajo te guía paso a paso.</p>
+      <button class="btn btn-azul btn-full" onclick="abrirModal('modal-config')">🔧 Configurar base de datos compartida</button>
+    </div>
+  </div>
+  <div id="admin-panel" style="display:none"></div>
+</div>
+
+</main>
+
+<!-- ══ MODAL: Identificación ══ -->
+<div class="modal-bg" id="modal-id">
+  <div class="modal">
+    <h2>¿Quién eres?</h2>
+    <p style="font-size:13px;color:var(--gris);margin-bottom:14px">Toca tu nombre para ingresar tus pronósticos.</p>
+    <div id="modal-plist"></div>
+    <hr class="divider">
+    <button class="btn btn-gris btn-full" onclick="cerrarModal('modal-id')">Cancelar</button>
+  </div>
+</div>
+
+<!-- ══ MODAL: Confirmar envío ══ -->
+<div class="modal-bg" id="modal-confirm">
+  <div class="modal">
+    <h2>⚠️ Confirmar envío definitivo</h2>
+    <div class="alert a-warn">Una vez enviados, tus pronósticos quedan <strong>bloqueados para siempre</strong>. No podrás cambiarlos aunque el torneo no haya comenzado.</div>
+    <div class="flexi" style="gap:8px;margin-top:14px">
+      <button class="btn btn-gris f1" onclick="cerrarModal('modal-confirm')">Revisar más</button>
+      <button class="btn btn-verde f1" onclick="confirmarEnvio()">✓ Enviar y bloquear</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Configuración ══ -->
+<div class="modal-bg" id="modal-config">
+  <div class="modal" style="max-width:560px">
+    <h2>🔧 Configurar base de datos compartida</h2>
+    <div class="alert a-info" style="margin-bottom:14px">
+      <strong>¿Por qué necesitas esto?</strong><br>
+      Sin esto, los datos solo existen en tu dispositivo. Con esto, cada participante puede abrir la app en su celular y todos ven los mismos pronósticos y puntuaciones.
+    </div>
+
+    <div style="font-weight:700;font-size:13px;margin-bottom:10px">El administrador hace esto una sola vez:</div>
+
+    <div class="step"><span class="sn">1</span><div>
+      Abre <a href="https://script.google.com/home" target="_blank" style="color:var(--azul2);font-weight:700">script.google.com</a> con tu cuenta de Google. Haz clic en el botón azul <strong>"Nuevo proyecto"</strong>.
+    </div></div>
+
+    <div class="step"><span class="sn">2</span><div>
+      <div style="margin-bottom:6px">Borra el código que aparece y pega este (también puedes usar el botón copiar):</div>
+      <pre class="gas" id="gas-code">// POLLA MUNDIAL 2026 - Base de datos
+const CLAVE = 'polla2026_v1';
+
+function doGet(e) {
+  const props = PropertiesService.getScriptProperties();
+  const raw = props.getProperty(CLAVE);
+  const data = raw ? JSON.parse(raw) : initData();
+  return ContentService
+    .createTextOutput(JSON.stringify({ok:true, data}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    if (body.action === 'setData') {
+      PropertiesService.getScriptProperties()
+        .setProperty(CLAVE, JSON.stringify(body.data));
+      return ContentService
+        .createTextOutput(JSON.stringify({ok:true}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ok:false}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function initData() {
+  return {participantes:[], pronosticos:{},
+          resultados:{}, adminPass:'admin2026'};
+}</pre>
+      <button class="btn btn-gris" style="font-size:12px;margin-top:4px" onclick="copiarScript()">📋 Copiar código</button>
+    </div></div>
+
+    <div class="step"><span class="sn">3</span><div>
+      Haz clic en el botón <strong>"Implementar"</strong> (ícono de nube con flecha arriba a la derecha) → <strong>"Nueva implementación"</strong>.<br>
+      <ul style="margin:6px 0 0 14px;font-size:12px;line-height:1.9;color:var(--negro)">
+        <li>En "Tipo" selecciona <strong>"Aplicación web"</strong></li>
+        <li>En "Ejecutar como" elige <strong>"Yo (tu email de Google)"</strong></li>
+        <li>En "Quién tiene acceso" elige <strong>"Cualquier persona"</strong></li>
+        <li>Haz clic en <strong>"Implementar"</strong> y acepta los permisos que pide</li>
+      </ul>
+    </div></div>
+
+    <div class="step"><span class="sn">4</span><div>
+      Google mostrará una <strong>"URL de la aplicación web"</strong>. Se ve así:<br>
+      <div style="background:var(--gris-cl);border:1px solid var(--gris-md);border-radius:var(--r-sm);padding:8px;font-size:11px;font-family:monospace;margin:5px 0;word-break:break-all">https://script.google.com/macros/s/AKfycb.../exec</div>
+      Copia esa URL completa y pégala abajo:
+    </div></div>
+
+    <div class="ig"><div class="lbl">URL de Google Apps Script</div>
+      <input type="text" id="cfg-url" placeholder="https://script.google.com/macros/s/.../exec">
+    </div>
+    <div class="ig"><div class="lbl">Contraseña de administrador (elige una nueva o deja la default)</div>
+      <input type="password" id="cfg-pass" placeholder="admin2026">
+    </div>
+    <div id="cfg-error" class="alert a-err" style="display:none;margin-bottom:8px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="btn btn-gris btn-full" onclick="usarLocal()">Modo local (solo este dispositivo)</button>
+      <button class="btn btn-verde btn-full" id="btn-conectar" onclick="guardarConfig()">✓ Conectar</button>
+    </div>
+    <div class="alert a-warn" style="margin-top:10px;font-size:11px">
+      <strong>Modo local:</strong> Los datos solo se guardan en este navegador. Si lo borras, se pierden. Sirve para probar pero no para compartir.
+    </div>
+  </div>
+</div>
+
+<script>
+const GRUPOS={
+  A:['Mexico','Corea del Sur','Sudáfrica','República Checa'],
+  B:['Canadá','Qatar','Suiza','Bosnia'],
+  C:['Brasil','Haití','Marruecos','Escocia'],
+  D:['USA','Australia','Paraguay','Turquía'],
+  E:['Alemania','Costa de Marfil','Curazao','Ecuador'],
+  F:['Países Bajos','Suecia','Japón','Túnez'],
+  G:['Bélgica','Irán','Egipto','Nueva Zelanda'],
+  H:['España','Arabia Saudita','Cabo Verde','Uruguay'],
+  I:['Francia','Irak','Senegal','Noruega'],
+  J:['Argentina','Austria','Argelia','Jordania'],
+  K:['Portugal','Uzbekistán','RD Congo','Colombia'],
+  L:['Inglaterra','Ghana','Croacia','Panamá']
+};
+const AVC=[
+  ['#dbeafe','#1e40af'],['#d8f3dc','#1b4332'],['#fde8ea','#991b1b'],
+  ['#ede9fe','#4c1d95'],['#d1fae5','#064e3b'],['#fef3c7','#92400e'],
+  ['#fce7f3','#831843'],['#e5e7eb','#374151'],['#ffedd5','#7c2d12'],
+  ['#e0f2fe','#0c4a6e'],['#dcfce7','#166534'],['#fef9c3','#713f12']
+];
+
+let DB={participantes:[],pronosticos:{},resultados:{},adminPass:'admin2026'};
+let UID=null, ADMIN=false, BURL='', LOCAL=false;
+
+// ── INICIO ──
+async function init(){
+  BURL=localStorage.getItem('p26_url')||'';
+  LOCAL=localStorage.getItem('p26_local')==='1';
+  UID=localStorage.getItem('p26_uid')||null;
+  if(!BURL&&!LOCAL){
+    cargarCache(); setEstado('noconfig');
+  } else {
+    await cargarDatos();
+  }
+  actualizarHeader();
+  renderRanking();
+}
+
+function cargarCache(){
+  try{const r=localStorage.getItem('p26_db');if(r)DB=JSON.parse(r);}catch(e){}
+}
+
+async function cargarDatos(){
+  if(LOCAL){cargarCache();setEstado('local');return;}
+  try{
+    const r=await fetch(BURL+'?action=getData',{redirect:'follow'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(!j.ok) throw new Error('Respuesta inválida');
+    DB=j.data; localStorage.setItem('p26_db',JSON.stringify(DB));
+    setEstado('ok');
+  }catch(e){
+    cargarCache(); setEstado('error',e.message);
+  }
+}
+
+async function guardarDatos(){
+  localStorage.setItem('p26_db',JSON.stringify(DB));
+  if(LOCAL) return true;
+  try{
+    const r=await fetch(BURL,{method:'POST',redirect:'follow',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'setData',data:DB})});
+    const j=await r.json(); return !!j.ok;
+  }catch(e){return false;}
+}
+
+function setEstado(s,msg){
+  const el=document.getElementById('estado-backend'); if(!el) return;
+  const msgs={
+    ok:'<div class="alert a-ok" style="font-size:12px">✓ Conectado — todos los participantes ven los mismos datos.</div>',
+    local:'<div class="alert a-warn" style="font-size:12px">ℹ Modo local activo. Solo este dispositivo guarda datos.</div>',
+    error:`<div class="alert a-warn" style="font-size:12px">⚠ Sin conexión al servidor. Mostrando datos locales. (${msg||''})<br>Ve a <strong>Admin → Configurar base de datos</strong>.</div>`,
+    noconfig:'<div class="alert a-warn" style="font-size:12px">⚠ Base de datos no configurada. Ve a la pestaña <strong>Admin</strong> y configura la base de datos para compartir con todos.</div>'
+  };
+  el.innerHTML=msgs[s]||'';
+  // sync dot in admin
+  const cs=document.getElementById('config-status');
+  if(cs){
+    const dots={ok:'dot-ok',local:'dot-warn',error:'dot-err',noconfig:'dot-err'};
+    const txt={ok:'Conectado a base de datos compartida',local:'Modo local (solo este dispositivo)',error:'Error de conexión',noconfig:'Sin configurar'};
+    cs.innerHTML=`<div class="flexi" style="gap:6px;font-size:13px;margin-bottom:8px"><span class="dot ${dots[s]||'dot-err'}"></span>${txt[s]||s}</div>`;
+  }
+}
+
+// ── LÓGICA FIFA ──
+function pk(a,b){return a+'|||'+b;}
+function genPs(g){const eq=GRUPOS[g],ps=[];for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)ps.push({local:eq[i],vis:eq[j]});return ps;}
+function signo(a,b){return a>b?'L':b>a?'V':'E';}
+
+function clasificar(partidos,g){
+  const eq=GRUPOS[g],s={};
+  eq.forEach(e=>{s[e]={pts:0,gf:0,gc:0,dg:0,pj:0};});
+  partidos.forEach(p=>{
+    const g1=parseInt(p.g1),g2=parseInt(p.g2);
+    if(isNaN(g1)||isNaN(g2)||p.g1===''||p.g2==='') return;
+    s[p.local].gf+=g1;s[p.local].gc+=g2;s[p.local].dg+=(g1-g2);s[p.local].pj++;
+    s[p.vis].gf+=g2;s[p.vis].gc+=g1;s[p.vis].dg+=(g2-g1);s[p.vis].pj++;
+    if(g1>g2)s[p.local].pts+=3;else if(g2>g1)s[p.vis].pts+=3;else{s[p.local].pts++;s[p.vis].pts++;}
+  });
+  return eq.map(e=>({equipo:e,...s[e]})).sort((a,b)=>b.pts-a.pts||b.dg-a.dg||b.gf-a.gf||a.equipo.localeCompare(b.equipo));
+}
+
+function mejTerceros(cls){
+  return Object.values(cls).filter(c=>c.length>=3).map(c=>c[2])
+    .sort((a,b)=>b.pts-a.pts||b.dg-a.dg||b.gf-a.gf||a.equipo.localeCompare(b.equipo))
+    .slice(0,8).map(t=>t.equipo);
+}
+
+/** Calcula puntos. FIX: grupos solo se puntúan si hay resultados reales. */
+function calcPuntos(pron,res){
+  let pM=0,pG=0,pT=0;
+  const gs=Object.keys(GRUPOS),pc={},rc={};
+  gs.forEach(g=>{
+    const ps=genPs(g),pG_=pron[g]||{},rG_=res[g]||{};
+    // marcadores
+    ps.forEach(p=>{
+      const k=pk(p.local,p.vis),pr=pG_[k]||{},re=rG_[k]||{};
+      if(re.g1===undefined||re.g1===''||pr.g1===undefined||pr.g1==='') return;
+      const pg1=+pr.g1,pg2=+pr.g2,rg1=+re.g1,rg2=+re.g2;
+      if(pg1===rg1&&pg2===rg2) pM+=5;
+      else if(signo(pg1,pg2)===signo(rg1,rg2)) pM+=2;
+    });
+    // clasificaciones
+    pc[g]=clasificar(ps.map(p=>{const k=pk(p.local,p.vis);const pr=pG_[k]||{};return{...p,g1:pr.g1??'',g2:pr.g2??''};}),g);
+    rc[g]=clasificar(ps.map(p=>{const k=pk(p.local,p.vis);const re=rG_[k]||{};return{...p,g1:re.g1??'',g2:re.g2??''};}),g);
+    // FIX: puntos de grupo SOLO si hay resultados reales
+    const hayR=ps.some(p=>{const re=(rG_[pk(p.local,p.vis)]||{});return re.g1!==undefined&&re.g1!=='';});
+    if(!hayR) return;
+    const t3P=pc[g].slice(0,3).map(x=>x.equipo);
+    const t3R=rc[g].slice(0,3).map(x=>x.equipo);
+    [0,1,2].forEach(i=>{
+      if(i>=t3P.length||i>=t3R.length) return;
+      if(t3P[i]===t3R[i]) pG+=3; else if(t3R.includes(t3P[i])) pG+=2;
+    });
+  });
+  // mejores terceros
+  const hayGlobal=gs.some(g=>Object.keys(res[g]||{}).length>0);
+  if(hayGlobal){
+    const mt=mejTerceros(rc);
+    gs.forEach(g=>{if(pc[g]&&pc[g].length>=3&&mt.includes(pc[g][2].equipo)) pT+=2;});
+  }
+  return{pM,pG,pT,total:pM+pG+pT};
+}
+
+// ── RANKING ──
+function renderRanking(){
+  document.getElementById('badge-np').textContent=DB.participantes.length+' participantes';
+  const rows=DB.participantes.map(p=>{
+    const r=calcPuntos(DB.pronosticos[p.id]||{},DB.resultados);
+    return{...p,...r};
+  }).sort((a,b)=>b.total-a.total);
+  let h='';
+  if(!rows.length){h='<div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">El administrador debe añadir participantes en la pestaña Admin.</div>';}
+  else rows.forEach((p,i)=>{
+    const [bg,fg]=avc(p.id);
+    h+=`<div class="rrow ${i<3?'r'+(i+1):''}">
+      <div class="rnum">${i+1}</div>
+      <div class="av" style="width:36px;height:36px;font-size:13px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">${p.nombre}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px">
+          <span class="badge b-oro">${p.total} pts</span>
+          <span class="badge b-verde">${p.pM} marc.</span>
+          <span class="badge b-azul">${p.pG} grupos</span>
+          <span class="badge b-ambar">${p.pT} 3.ºs</span>
+          ${p.bloqueado?'<span class="badge b-gris">✓ enviado</span>':'<span class="badge b-rojo">pendiente</span>'}
+        </div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('ranking-lista').innerHTML=h;
+}
+
+// ── PRONÓSTICOS ──
+function renderPronosticos(){
+  if(!UID){mostrarLoginPron();}
+  else{const p=DB.participantes.find(x=>x.id===UID);if(p)mostrarFormPron(p);else mostrarLoginPron();}
+}
+
+function mostrarLoginPron(){
+  document.getElementById('pron-login').style.display='block';
+  document.getElementById('pron-form').style.display='none';
+  let h=`<div class="card"><div class="ct">Selecciona tu nombre</div>
+    <p style="font-size:13px;color:var(--gris);margin-bottom:12px">Toca tu nombre para ingresar o revisar tus pronósticos.</p>`;
+  if(!DB.participantes.length){h+='<div class="alert a-warn">El administrador aún no ha registrado participantes.</div>';}
+  else DB.participantes.forEach(p=>{
+    const [bg,fg]=avc(p.id);
+    h+=`<div class="pcard" onclick="elegirU('${p.id}')">
+      <div class="av" style="width:38px;height:38px;font-size:14px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
+      <div style="flex:1"><div style="font-size:14px;font-weight:700">${p.nombre}</div>
+      <div style="font-size:12px;color:var(--gris)">${p.email}</div></div>
+      ${p.bloqueado?'<span class="badge b-gris">✓ Enviado</span>':'<span class="badge b-rojo">Pendiente</span>'}
+    </div>`;
+  });
+  h+='</div>';
+  document.getElementById('pron-login').innerHTML=h;
+}
+
+function elegirU(uid){UID=uid;localStorage.setItem('p26_uid',uid);actualizarHeader();renderPronosticos();}
+
+function mostrarFormPron(p){
+  document.getElementById('pron-login').style.display='none';
+  document.getElementById('pron-form').style.display='block';
+  const locked=!!p.bloqueado;
+  let h=locked
+    ?'<div class="locked">🔒 Tus pronósticos están enviados y bloqueados. Ya no puedes modificarlos.</div>'
+    :'<div class="alert a-warn">Al enviar, tus pronósticos quedan <strong>bloqueados definitivamente</strong>.</div>';
+  h+=`<div class="card">
+    <div class="flexi" style="margin-bottom:10px">
+      <span class="ct" style="margin:0">Pronósticos — ${p.nombre}</span>
+      <button class="btn btn-gris" style="font-size:11px;padding:5px 10px" onclick="salirU()">Cambiar usuario</button>
+    </div>
+    <div class="gtabs" id="ptabs">`;
+  Object.keys(GRUPOS).forEach((g,i)=>{
+    const n=contarIngs(UID,g);
+    h+=`<button class="gtab ${i===0?'active':''}" id="ptab-${g}" onclick="mostrarGrupoPron('${g}',this)">
+      ${g}${n>0?`<span style="font-size:9px;background:var(--verde-cl);color:var(--verde-dk);border-radius:99px;padding:0 3px;margin-left:2px">${n}</span>`:''}
+    </button>`;
+  });
+  h+=`</div><div id="gpron-body"></div>`;
+  if(!locked) h+=`<div style="margin-top:14px;display:flex;justify-content:flex-end;align-items:center;gap:8px">
+    <span style="font-size:12px;color:var(--gris)" id="pron-cnt"></span>
+    <button class="btn btn-verde" onclick="pedirConfirm()">✓ Enviar mis pronósticos</button>
+  </div>`;
+  h+='</div>';
+  document.getElementById('pron-form').innerHTML=h;
+  mostrarGrupoPron('A',null);
+  actCnt();
+}
+
+function contarIngs(uid,g){
+  const ps=genPs(g),pG=DB.pronosticos[uid]?.[g]||{};
+  return ps.filter(p=>{const pr=pG[pk(p.local,p.vis)]||{};return pr.g1!==undefined&&pr.g1!=='';}).length;
+}
+
+function actCnt(){
+  const el=document.getElementById('pron-cnt');if(!el)return;
+  let tot=0,ing=0;
+  Object.keys(GRUPOS).forEach(g=>{const ps=genPs(g);tot+=ps.length;ing+=contarIngs(UID,g);});
+  el.textContent=ing+'/'+tot+' partidos ingresados';
+}
+
+function mostrarGrupoPron(g,btn){
+  document.querySelectorAll('[id^="ptab-"]').forEach(t=>t.classList.remove('active'));
+  const t=btn||document.getElementById('ptab-'+g);if(t)t.classList.add('active');
+  const p=DB.participantes.find(x=>x.id===UID);
+  const locked=!!p.bloqueado;
+  const pG=DB.pronosticos[UID]?.[g]||{};
+  const ps=genPs(g);
+  const rG=DB.resultados[g]||{};
+  let h=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+    <div><div class="lbl" style="margin-bottom:6px">Partidos — Grupo ${g}</div>`;
+  ps.forEach(p=>{
+    const key=pk(p.local,p.vis),pr=pG[key]||{},re=rG[key]||{};
+    const tieneR=re.g1!==undefined&&re.g1!=='';
+    h+=`<div class="match-row">
+      <span class="eq r" title="${p.local}">${p.local}</span>
+      ${locked
+        ?`<span class="sval">${pr.g1??'—'}</span><span class="sdash">—</span><span class="sval">${pr.g2??'—'}</span>`
+        :`<input class="sinp" type="number" min="0" max="20" value="${pr.g1??''}"
+           oninput="sp('${g}','${key}','g1',this.value);tviva('${g}');actCnt()" id="i_${g}_${key}_g1">
+          <span class="sdash">—</span>
+          <input class="sinp" type="number" min="0" max="20" value="${pr.g2??''}"
+           oninput="sp('${g}','${key}','g2',this.value);tviva('${g}');actCnt()" id="i_${g}_${key}_g2">`}
+      <span class="eq" title="${p.vis}">${p.vis}</span>
+      ${tieneR?`<span class="badge b-gris" style="font-size:10px;margin-left:2px;flex-shrink:0">${re.g1}—${re.g2}</span>`:''}
+    </div>`;
+  });
+  h+=`</div><div>
+    <div class="lbl" style="margin-bottom:6px">Clasificación provisional</div>
+    <div id="tv-${g}"></div>
+  </div></div>`;
+  document.getElementById('gpron-body').innerHTML=h;
+  tviva(g);
+}
+
+function sp(g,key,campo,val){
+  if(!DB.pronosticos[UID])DB.pronosticos[UID]={};
+  if(!DB.pronosticos[UID][g])DB.pronosticos[UID][g]={};
+  if(!DB.pronosticos[UID][g][key])DB.pronosticos[UID][g][key]={};
+  DB.pronosticos[UID][g][key][campo]=val;
+}
+
+function tviva(g){
+  const ps=genPs(g).map(p=>{
+    const key=pk(p.local,p.vis);
+    const g1El=document.getElementById(`i_${g}_${key}_g1`);
+    const g2El=document.getElementById(`i_${g}_${key}_g2`);
+    const st=DB.pronosticos[UID]?.[g]?.[key]||{};
+    return{...p,g1:g1El?g1El.value:st.g1??'',g2:g2El?g2El.value:st.g2??''};
+  });
+  renderTV('tv-'+g, clasificar(ps,g));
+}
+
+function renderTV(id,cl){
+  const el=document.getElementById(id);if(!el)return;
+  const pc=['p1','p2','p3',''];
+  let h=`<table class="tviva"><thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr></thead><tbody>`;
+  cl.forEach((e,i)=>{
+    h+=`<tr><td class="${pc[i]}">${i+1}</td>
+      <td style="font-weight:600;font-size:11px;white-space:nowrap">${e.equipo}</td>
+      <td class="tc">${e.pj}</td><td class="tc">${e.gf}</td><td class="tc">${e.gc}</td>
+      <td class="tc ${e.dg>0?'dg-p':e.dg<0?'dg-n':''}">${e.dg>0?'+':''}${e.dg}</td>
+      <td class="tc" style="font-weight:700">${e.pts}</td></tr>`;
+  });
+  h+=`</tbody></table><div style="font-size:10px;margin-top:4px;color:var(--gris)"><span class="p1">1.º</span> <span class="p2">2.º</span> clasifican · <span class="p3">3.º</span> posible mejor tercero</div>`;
+  el.innerHTML=h;
+}
+
+function pedirConfirm(){
+  let tot=0,ing=0;
+  Object.keys(GRUPOS).forEach(g=>{const ps=genPs(g);tot+=ps.length;ing+=contarIngs(UID,g);});
+  if(ing<6&&!confirm(`Solo has ingresado ${ing} de ${tot} marcadores. ¿Seguro que quieres enviar?`)) return;
+  abrirModal('modal-confirm');
+}
+
+async function confirmarEnvio(){
+  cerrarModal('modal-confirm');
+  const p=DB.participantes.find(x=>x.id===UID);
+  if(p) p.bloqueado=true;
+  const ok=await guardarDatos();
+  toast(ok?'✓ Pronósticos enviados y bloqueados':'⚠ Guardado localmente (revisa conexión)',ok?'verde':'ambar');
+  renderPronosticos(); renderRanking();
+}
+
+function salirU(){UID=null;localStorage.removeItem('p26_uid');actualizarHeader();renderPronosticos();}
+
+// ── VER TODOS ──
+function renderVerTodos(){
+  const el=document.getElementById('vt-content');
+  const tot=DB.participantes.length,env=DB.participantes.filter(p=>p.bloqueado).length;
+  if(!tot){el.innerHTML='<div class="alert a-warn">No hay participantes registrados aún.</div>';return;}
+  if(env<tot){
+    let h=`<div class="alert a-info"><strong>Los pronósticos se revelan cuando TODOS hayan enviado.</strong><br>Enviados: ${env} de ${tot}.</div>
+      <div class="card"><div class="ct">Estado de envíos</div>`;
+    DB.participantes.forEach(p=>{
+      const [bg,fg]=avc(p.id);
+      h+=`<div class="rrow">
+        <div class="av" style="width:32px;height:32px;font-size:12px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
+        <div style="flex:1"><div style="font-weight:700;font-size:13px">${p.nombre}</div></div>
+        ${p.bloqueado?'<span class="badge b-verde">✓ Enviado</span>':'<span class="badge b-rojo">Pendiente</span>'}
+      </div>`;
+    });
+    h+='</div>';el.innerHTML=h;return;
+  }
+  let h=`<div class="alert a-ok">✓ Todos han enviado sus pronósticos.</div>
+    <div class="gtabs" id="vttabs">`;
+  Object.keys(GRUPOS).forEach((g,i)=>{
+    h+=`<button class="gtab ${i===0?'active':''}" id="vttab-${g}" onclick="vtG('${g}',this)">${g}</button>`;
+  });
+  h+=`</div><div id="vt-gbody"></div>`;
+  el.innerHTML=h; vtG('A',null);
+}
+
+function vtG(g,btn){
+  document.querySelectorAll('[id^="vttab-"]').forEach(t=>t.classList.remove('active'));
+  const t=btn||document.getElementById('vttab-'+g);if(t)t.classList.add('active');
+  const ps=genPs(g),rG=DB.resultados[g]||{};
+  let h=`<div class="card" style="overflow-x:auto"><div class="ct">Grupo ${g}</div>
+    <table><thead><tr>
+      <th>Partido</th>
+      <th style="text-align:center;background:var(--azul-cl);color:#1e40af">Real</th>
+      ${DB.participantes.map(p=>`<th style="text-align:center;font-size:11px">${p.nombre.split(' ')[0]}</th>`).join('')}
+    </tr></thead><tbody>`;
+  ps.forEach(p=>{
+    const key=pk(p.local,p.vis),re=rG[key]||{};
+    const tieneR=re.g1!==undefined&&re.g1!=='';
+    h+=`<tr><td style="font-size:11px;white-space:nowrap">${p.local} — ${p.vis}</td>
+      <td class="tc" style="background:var(--azul-cl);font-weight:700">${tieneR?re.g1+' — '+re.g2:'<span class="badge b-gris">—</span>'}</td>`;
+    DB.participantes.forEach(part=>{
+      const pr=(DB.pronosticos[part.id]?.[g]?.[key])||{};
+      const tieneP=pr.g1!==undefined&&pr.g1!=='';
+      let cls='b-gris';
+      if(tieneR&&tieneP){
+        const pg1=+pr.g1,pg2=+pr.g2,rg1=+re.g1,rg2=+re.g2;
+        if(pg1===rg1&&pg2===rg2) cls='b-verde';
+        else if(signo(pg1,pg2)===signo(rg1,rg2)) cls='b-azul';
+        else cls='b-rojo';
+      }
+      h+=`<td class="tc"><span class="badge ${cls}">${tieneP?pr.g1+' — '+pr.g2:'—'}</span></td>`;
+    });
+    h+='</tr>';
+  });
+  h+=`</tbody></table></div>`;
+  document.getElementById('vt-gbody').innerHTML=h;
+}
+
+// ── ADMIN ──
+function loginAdmin(){
+  const pass=document.getElementById('apass').value;
+  if(pass===DB.adminPass){
+    ADMIN=true;
+    document.getElementById('admin-login-wrap').style.display='none';
+    document.getElementById('admin-panel').style.display='block';
+    renderAdmin();
+  } else {
+    document.getElementById('apass-err').style.display='block';
+  }
+}
+
+function renderAdmin(){
+  let h=`
+  <div class="card">
+    <div class="ct">⚙️ Conexión</div>
+    <div id="config-status"></div>
+    <button class="btn btn-azul btn-full" onclick="abrirModal('modal-config')">🔧 Configurar base de datos compartida</button>
+  </div>
+  <div class="card">
+    <div class="ct">👥 Participantes</div>
+    <div id="ap-lista"></div>
+    <hr class="divider">
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px">Añadir participante</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><div class="lbl">Nombre completo</div><input type="text" id="np-n" placeholder="Nombre Apellido"></div>
+      <div><div class="lbl">Email / usuario</div><input type="text" id="np-e" placeholder="email@..."></div>
+    </div>
+    <button class="btn btn-azul" onclick="addP()">+ Añadir participante</button>
+    <div id="ap-err" class="alert a-err" style="display:none;margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <div class="ct">📊 Resultados reales</div>
+    <div class="alert a-info" style="margin-bottom:10px;font-size:12px">Ingresa los marcadores oficiales. Los puntos se actualizan automáticamente para todos.</div>
+    <div class="gtabs" id="atabs">`;
+  Object.keys(GRUPOS).forEach((g,i)=>{
+    const n=genPs(g).filter(p=>{const re=(DB.resultados[g]||{})[pk(p.local,p.vis)]||{};return re.g1!==undefined&&re.g1!=='';}).length;
+    h+=`<button class="gtab ${i===0?'active':''}" id="atab-${g}" onclick="adminG('${g}',this)">
+      ${g}${n>0?`<span style="font-size:9px;background:var(--verde-cl);color:var(--verde-dk);border-radius:99px;padding:0 3px;margin-left:2px">${n}</span>`:''}
+    </button>`;
+  });
+  h+=`</div><div id="admin-rbody"></div></div>`;
+  document.getElementById('admin-panel').innerHTML=h;
+  renderAPLista(); adminG('A',null);
+  setEstado(BURL&&!LOCAL?'ok':LOCAL?'local':'noconfig');
+}
+
+function renderAPLista(){
+  const el=document.getElementById('ap-lista');if(!el)return;
+  if(!DB.participantes.length){el.innerHTML='<div style="color:var(--gris);font-size:13px">Sin participantes.</div>';return;}
+  el.innerHTML=DB.participantes.map(p=>{
+    const [bg,fg]=avc(p.id);
+    return`<div class="rrow">
+      <div class="av" style="width:32px;height:32px;font-size:12px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
+      <div style="flex:1"><div style="font-weight:700;font-size:13px">${p.nombre}</div>
+        <div style="font-size:12px;color:var(--gris)">${p.email} · ${p.bloqueado?'✓ Enviado':'Pendiente'}</div>
+      </div>
+      <div style="display:flex;gap:4px">
+        ${p.bloqueado?`<button class="btn btn-gris" style="font-size:11px;padding:4px 8px" onclick="desblq('${p.id}')">Desbloquear</button>`:''}
+        <button class="btn btn-rojo" style="font-size:11px;padding:4px 8px" onclick="delP('${p.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addP(){
+  const nombre=document.getElementById('np-n').value.trim();
+  const email=document.getElementById('np-e').value.trim();
+  if(!nombre||!email){showErr('ap-err','Nombre y email son obligatorios');return;}
+  if(DB.participantes.length>=40){showErr('ap-err','Máximo 40 participantes');return;}
+  if(DB.participantes.find(x=>x.email===email)){showErr('ap-err','Ya existe ese email');return;}
+  const id='u'+Date.now()+Math.random().toString(36).slice(2,5);
+  DB.participantes.push({id,nombre,email,bloqueado:false});
+  document.getElementById('np-n').value='';document.getElementById('np-e').value='';
+  document.getElementById('ap-err').style.display='none';
+  await guardarDatos(); renderAPLista(); renderRanking();
+  toast('✓ Participante añadido','verde');
+}
+
+async function delP(uid){
+  if(!confirm('¿Eliminar participante y todos sus pronósticos?')) return;
+  DB.participantes=DB.participantes.filter(p=>p.id!==uid);
+  delete DB.pronosticos[uid];
+  await guardarDatos(); renderAPLista(); renderRanking();
+}
+
+async function desblq(uid){
+  if(!confirm('¿Permitir que este participante modifique sus pronósticos?')) return;
+  const p=DB.participantes.find(x=>x.id===uid);
+  if(p){p.bloqueado=false;await guardarDatos();renderAPLista();}
+}
+
+function adminG(g,btn){
+  document.querySelectorAll('[id^="atab-"]').forEach(t=>t.classList.remove('active'));
+  const t=btn||document.getElementById('atab-'+g);if(t)t.classList.add('active');
+  const ps=genPs(g),rG=DB.resultados[g]||{};
+  let h=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px"><div>
+    <div class="lbl" style="margin-bottom:6px">Resultados — Grupo ${g}</div>`;
+  ps.forEach(p=>{
+    const key=pk(p.local,p.vis),re=rG[key]||{};
+    h+=`<div class="match-row">
+      <span class="eq r" title="${p.local}">${p.local}</span>
+      <input class="sinp" type="number" min="0" max="20" value="${re.g1??''}"
+        oninput="sr('${g}','${key}','g1',this.value);tvivaA('${g}')" id="ar_${g}_${key}_g1">
+      <span class="sdash">—</span>
+      <input class="sinp" type="number" min="0" max="20" value="${re.g2??''}"
+        oninput="sr('${g}','${key}','g2',this.value);tvivaA('${g}')" id="ar_${g}_${key}_g2">
+      <span class="eq" title="${p.vis}">${p.vis}</span>
+    </div>`;
+  });
+  h+=`</div><div>
+    <div class="lbl" style="margin-bottom:6px">Clasificación calculada</div>
+    <div id="arv-${g}"></div>
+  </div></div>
+  <div style="margin-top:12px;text-align:right">
+    <button class="btn btn-verde" onclick="guardarRes('${g}')">💾 Guardar grupo ${g}</button>
+  </div>`;
+  document.getElementById('admin-rbody').innerHTML=h;
+  tvivaA(g);
+}
+
+function sr(g,key,campo,val){
+  if(!DB.resultados[g])DB.resultados[g]={};
+  if(!DB.resultados[g][key])DB.resultados[g][key]={};
+  DB.resultados[g][key][campo]=val;
+}
+
+function tvivaA(g){
+  const ps=genPs(g).map(p=>{
+    const key=pk(p.local,p.vis);
+    const g1El=document.getElementById(`ar_${g}_${key}_g1`);
+    const g2El=document.getElementById(`ar_${g}_${key}_g2`);
+    const st=(DB.resultados[g]||{})[key]||{};
+    return{...p,g1:g1El?g1El.value:st.g1??'',g2:g2El?g2El.value:st.g2??''};
+  });
+  renderTV('arv-'+g,clasificar(ps,g));
+}
+
+async function guardarRes(g){
+  const ok=await guardarDatos(); renderRanking();
+  toast(ok?`✓ Resultados grupo ${g} guardados`:'⚠ Guardado localmente',ok?'verde':'ambar');
+}
+
+// ── CONFIGURACIÓN ──
+function usarLocal(){
+  LOCAL=true;BURL='';
+  localStorage.setItem('p26_local','1');localStorage.removeItem('p26_url');
+  const pass=document.getElementById('cfg-pass').value.trim();
+  if(pass.length>=4) DB.adminPass=pass;
+  guardarDatos();cerrarModal('modal-config');setEstado('local');
+  toast('Modo local activado','ambar');
+}
+
+async function guardarConfig(){
+  const url=document.getElementById('cfg-url').value.trim();
+  const passVal=document.getElementById('cfg-pass').value.trim();
+  const pass=passVal||'admin2026';
+  document.getElementById('cfg-error').style.display='none';
+  if(!url){showErr('cfg-error','Pega la URL de Google Apps Script');return;}
+  if(!url.includes('script.google.com')){showErr('cfg-error','La URL debe ser de script.google.com/macros/s/.../exec');return;}
+  const btn=document.getElementById('btn-conectar');
+  btn.textContent='Probando conexión...';btn.disabled=true;
+  BURL=url;LOCAL=false;
+  localStorage.setItem('p26_url',url);localStorage.removeItem('p26_local');
+  DB.adminPass=pass;
+  try{
+    const r=await fetch(BURL+'?action=getData',{redirect:'follow'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(!j.ok) throw new Error('El script devolvió error');
+    DB=j.data; DB.adminPass=pass;
+    await guardarDatos();
+    cerrarModal('modal-config');
+    setEstado('ok');
+    toast('✓ Conectado exitosamente','verde');
+  }catch(e){
+    showErr('cfg-error',`No se pudo conectar: ${e.message}. Verifica: (1) URL correcta, (2) elegiste "Cualquier persona" en el acceso, (3) aceptaste los permisos de Google.`);
+    BURL='';localStorage.removeItem('p26_url');
+  }
+  btn.textContent='✓ Conectar';btn.disabled=false;
+}
+
+function copiarScript(){
+  const txt=document.getElementById('gas-code').textContent;
+  const f=()=>{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✓ Código copiado','verde');};
+  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('✓ Código copiado','verde')).catch(f);}else f();
+}
+
+// ── NAVEGACIÓN ──
+function irA(page,btn){
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  document.getElementById('pg-'+page).classList.add('active');
+  btn.classList.add('active');
+  const r={ranking:renderRanking,pronosticos:renderPronosticos,vertodos:renderVerTodos,admin:()=>{if(ADMIN)renderAdmin();}};
+  if(r[page])r[page]();
+}
+
+// ── UTILS ──
+function inic(n){return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
+function avc(id){const i=Math.abs((id||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0))%AVC.length;return AVC[i];}
+function abrirModal(id){document.getElementById(id).classList.add('open');}
+function cerrarModal(id){document.getElementById(id).classList.remove('open');}
+function showErr(id,msg){const e=document.getElementById(id);if(e){e.textContent=msg;e.style.display='block';}}
+function actualizarHeader(){
+  const el=document.getElementById('huser');if(!el)return;
+  if(!UID){el.innerHTML='';return;}
+  const p=DB.participantes.find(x=>x.id===UID);if(!p){el.innerHTML='';return;}
+  const [bg,fg]=avc(p.id);
+  el.innerHTML=`<div class="av" style="width:26px;height:26px;font-size:11px;background:${bg};color:${fg}">${inic(p.nombre)}</div><span>${p.nombre.split(' ')[0]}</span>`;
+}
+let _tt;
+function toast(msg,color='verde'){
+  let t=document.getElementById('_t');
+  if(!t){t=document.createElement('div');t.id='_t';t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;z-index:999;transition:opacity .3s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.2)';document.body.appendChild(t);}
+  const cs={verde:'background:#2d6a4f;color:#fff',ambar:'background:#b45309;color:#fff',rojo:'background:#c0392b;color:#fff'};
+  Object.assign(t.style,{opacity:'1',...Object.fromEntries((cs[color]||cs.verde).split(';').filter(Boolean).map(x=>x.split(':').map(s=>s.trim())))});
+  t.textContent=msg;clearTimeout(_tt);_tt=setTimeout(()=>{t.style.opacity='0';},3000);
+}
+
+init();
+</script>
+</body>
+</html>
