@@ -141,20 +141,13 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
     <div class="card">
       <div class="ct">⚙️ Panel de administrador</div>
       <div class="alert a-info" style="margin-bottom:12px">
-        Solo el administrador accede a este panel. Introduce la contraseña para continuar.<br>
-        <strong>Contraseña por defecto:</strong> <code style="background:var(--gris-cl);padding:1px 5px;border-radius:4px">admin2026</code>
+        Solo el administrador accede a este panel. Introduce la contraseña para continuar.
       </div>
       <div class="ig"><div class="lbl">Contraseña</div>
         <input type="password" id="apass" placeholder="Contraseña..." onkeydown="if(event.key==='Enter')loginAdmin()">
       </div>
       <button class="btn btn-azul btn-full" style="margin-top:8px" onclick="loginAdmin()">Entrar al panel</button>
       <div id="apass-err" class="alert a-err" style="display:none;margin-top:8px">Contraseña incorrecta</div>
-    </div>
-    <div class="card">
-      <div class="ct">🔧 Conexión a base de datos compartida</div>
-      <div id="config-status"><div class="flexi" style="gap:6px;font-size:13px;margin-bottom:8px"><span class="dot dot-warn"></span> Sin configurar</div></div>
-      <p style="font-size:12px;color:var(--gris);margin-bottom:10px">Para que todos puedan participar desde sus celulares, necesitas conectar una base de datos gratuita en Google. El botón de abajo te guía paso a paso.</p>
-      <button class="btn btn-azul btn-full" onclick="abrirModal('modal-config')">🔧 Configurar base de datos compartida</button>
     </div>
   </div>
   <div id="admin-panel" style="display:none"></div>
@@ -185,91 +178,7 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
   </div>
 </div>
 
-<!-- ══ MODAL: Configuración ══ -->
-<div class="modal-bg" id="modal-config">
-  <div class="modal" style="max-width:560px">
-    <h2>🔧 Configurar base de datos compartida</h2>
-    <div class="alert a-info" style="margin-bottom:14px">
-      <strong>¿Por qué necesitas esto?</strong><br>
-      Sin esto, los datos solo existen en tu dispositivo. Con esto, cada participante puede abrir la app en su celular y todos ven los mismos pronósticos y puntuaciones.
-    </div>
-
-    <div style="font-weight:700;font-size:13px;margin-bottom:10px">El administrador hace esto una sola vez:</div>
-
-    <div class="step"><span class="sn">1</span><div>
-      Abre <a href="https://script.google.com/home" target="_blank" style="color:var(--azul2);font-weight:700">script.google.com</a> con tu cuenta de Google. Haz clic en el botón azul <strong>"Nuevo proyecto"</strong>.
-    </div></div>
-
-    <div class="step"><span class="sn">2</span><div>
-      <div style="margin-bottom:6px">Borra el código que aparece y pega este (también puedes usar el botón copiar):</div>
-      <pre class="gas" id="gas-code">// POLLA MUNDIAL 2026 - Base de datos
-const CLAVE = 'polla2026_v1';
-
-function doGet(e) {
-  const props = PropertiesService.getScriptProperties();
-  const raw = props.getProperty(CLAVE);
-  const data = raw ? JSON.parse(raw) : initData();
-  return ContentService
-    .createTextOutput(JSON.stringify({ok:true, data}))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  try {
-    const body = JSON.parse(e.postData.contents);
-    if (body.action === 'setData') {
-      PropertiesService.getScriptProperties()
-        .setProperty(CLAVE, JSON.stringify(body.data));
-      return ContentService
-        .createTextOutput(JSON.stringify({ok:true}))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-  } catch(err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ok:false}))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function initData() {
-  return {participantes:[], pronosticos:{},
-          resultados:{}, adminPass:'admin2026'};
-}</pre>
-      <button class="btn btn-gris" style="font-size:12px;margin-top:4px" onclick="copiarScript()">📋 Copiar código</button>
-    </div></div>
-
-    <div class="step"><span class="sn">3</span><div>
-      Haz clic en el botón <strong>"Implementar"</strong> (ícono de nube con flecha arriba a la derecha) → <strong>"Nueva implementación"</strong>.<br>
-      <ul style="margin:6px 0 0 14px;font-size:12px;line-height:1.9;color:var(--negro)">
-        <li>En "Tipo" selecciona <strong>"Aplicación web"</strong></li>
-        <li>En "Ejecutar como" elige <strong>"Yo (tu email de Google)"</strong></li>
-        <li>En "Quién tiene acceso" elige <strong>"Cualquier persona"</strong></li>
-        <li>Haz clic en <strong>"Implementar"</strong> y acepta los permisos que pide</li>
-      </ul>
-    </div></div>
-
-    <div class="step"><span class="sn">4</span><div>
-      Google mostrará una <strong>"URL de la aplicación web"</strong>. Se ve así:<br>
-      <div style="background:var(--gris-cl);border:1px solid var(--gris-md);border-radius:var(--r-sm);padding:8px;font-size:11px;font-family:monospace;margin:5px 0;word-break:break-all">https://script.google.com/macros/s/AKfycb.../exec</div>
-      Copia esa URL completa y pégala abajo:
-    </div></div>
-
-    <div class="ig"><div class="lbl">URL de Google Apps Script</div>
-      <input type="text" id="cfg-url" placeholder="https://script.google.com/macros/s/.../exec">
-    </div>
-    <div class="ig"><div class="lbl">Contraseña de administrador (elige una nueva o deja la default)</div>
-      <input type="password" id="cfg-pass" placeholder="admin2026">
-    </div>
-    <div id="cfg-error" class="alert a-err" style="display:none;margin-bottom:8px"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <button class="btn btn-gris btn-full" onclick="usarLocal()">Modo local (solo este dispositivo)</button>
-      <button class="btn btn-verde btn-full" id="btn-conectar" onclick="guardarConfig()">✓ Conectar</button>
-    </div>
-    <div class="alert a-warn" style="margin-top:10px;font-size:11px">
-      <strong>Modo local:</strong> Los datos solo se guardan en este navegador. Si lo borras, se pierden. Sirve para probar pero no para compartir.
-    </div>
-  </div>
-</div>
+<!-- Modal de configuración eliminado — URL hardcodeada en el script -->
 
 <script>
 const GRUPOS={
@@ -294,18 +203,15 @@ const AVC=[
 ];
 
 let DB={participantes:[],pronosticos:{},resultados:{},adminPass:'admin2026'};
-let UID=null, ADMIN=false, BURL='', LOCAL=false;
+let UID=null, ADMIN=false, LOCAL=false;
+
+// ── URL fija de la base de datos — no tocar ──
+const BURL='https://script.google.com/macros/s/AKfycbzWqhQFkE4m73-WQ2cfxIOBPhb4GvPdyzco9U00csqbyQjYPZyZ0jZjXRctS9NKYVI/exec';
 
 // ── INICIO ──
 async function init(){
-  BURL=localStorage.getItem('p26_url')||'';
-  LOCAL=localStorage.getItem('p26_local')==='1';
   UID=localStorage.getItem('p26_uid')||null;
-  if(!BURL&&!LOCAL){
-    cargarCache(); setEstado('noconfig');
-  } else {
-    await cargarDatos();
-  }
+  await cargarDatos();
   actualizarHeader();
   renderRanking();
 }
@@ -315,7 +221,6 @@ function cargarCache(){
 }
 
 async function cargarDatos(){
-  if(LOCAL){cargarCache();setEstado('local');return;}
   try{
     const r=await fetch(BURL+'?action=getData',{redirect:'follow'});
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -324,13 +229,13 @@ async function cargarDatos(){
     DB=j.data; localStorage.setItem('p26_db',JSON.stringify(DB));
     setEstado('ok');
   }catch(e){
+    // Sin conexión: usar caché local como respaldo
     cargarCache(); setEstado('error',e.message);
   }
 }
 
 async function guardarDatos(){
   localStorage.setItem('p26_db',JSON.stringify(DB));
-  if(LOCAL) return true;
   try{
     const r=await fetch(BURL,{method:'POST',redirect:'follow',
       headers:{'Content-Type':'text/plain'},
@@ -342,19 +247,10 @@ async function guardarDatos(){
 function setEstado(s,msg){
   const el=document.getElementById('estado-backend'); if(!el) return;
   const msgs={
-    ok:'<div class="alert a-ok" style="font-size:12px">✓ Conectado — todos los participantes ven los mismos datos.</div>',
-    local:'<div class="alert a-warn" style="font-size:12px">ℹ Modo local activo. Solo este dispositivo guarda datos.</div>',
-    error:`<div class="alert a-warn" style="font-size:12px">⚠ Sin conexión al servidor. Mostrando datos locales. (${msg||''})<br>Ve a <strong>Admin → Configurar base de datos</strong>.</div>`,
-    noconfig:'<div class="alert a-warn" style="font-size:12px">⚠ Base de datos no configurada. Ve a la pestaña <strong>Admin</strong> y configura la base de datos para compartir con todos.</div>'
+    ok:'',
+    error:`<div class="alert a-warn" style="font-size:12px">⚠ Sin conexión al servidor. Mostrando datos del caché local — puede no estar actualizado.</div>`
   };
   el.innerHTML=msgs[s]||'';
-  // sync dot in admin
-  const cs=document.getElementById('config-status');
-  if(cs){
-    const dots={ok:'dot-ok',local:'dot-warn',error:'dot-err',noconfig:'dot-err'};
-    const txt={ok:'Conectado a base de datos compartida',local:'Modo local (solo este dispositivo)',error:'Error de conexión',noconfig:'Sin configurar'};
-    cs.innerHTML=`<div class="flexi" style="gap:6px;font-size:13px;margin-bottom:8px"><span class="dot ${dots[s]||'dot-err'}"></span>${txt[s]||s}</div>`;
-  }
 }
 
 // ── LÓGICA FIFA ──
@@ -676,11 +572,6 @@ function loginAdmin(){
 function renderAdmin(){
   let h=`
   <div class="card">
-    <div class="ct">⚙️ Conexión</div>
-    <div id="config-status"></div>
-    <button class="btn btn-azul btn-full" onclick="abrirModal('modal-config')">🔧 Configurar base de datos compartida</button>
-  </div>
-  <div class="card">
     <div class="ct">👥 Participantes</div>
     <div id="ap-lista"></div>
     <hr class="divider">
@@ -691,6 +582,14 @@ function renderAdmin(){
     </div>
     <button class="btn btn-azul" onclick="addP()">+ Añadir participante</button>
     <div id="ap-err" class="alert a-err" style="display:none;margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <div class="ct">🔑 Cambiar contraseña de administrador</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+      <div><div class="lbl">Nueva contraseña</div><input type="password" id="new-pass" placeholder="Mínimo 6 caracteres"></div>
+      <button class="btn btn-azul" onclick="cambiarPass()">Guardar</button>
+    </div>
+    <div id="pass-msg" style="display:none;margin-top:8px"></div>
   </div>
   <div class="card">
     <div class="ct">📊 Resultados reales</div>
@@ -705,7 +604,6 @@ function renderAdmin(){
   h+=`</div><div id="admin-rbody"></div></div>`;
   document.getElementById('admin-panel').innerHTML=h;
   renderAPLista(); adminG('A',null);
-  setEstado(BURL&&!LOCAL?'ok':LOCAL?'local':'noconfig');
 }
 
 function renderAPLista(){
@@ -804,49 +702,16 @@ async function guardarRes(g){
   toast(ok?`✓ Resultados grupo ${g} guardados`:'⚠ Guardado localmente',ok?'verde':'ambar');
 }
 
-// ── CONFIGURACIÓN ──
-function usarLocal(){
-  LOCAL=true;BURL='';
-  localStorage.setItem('p26_local','1');localStorage.removeItem('p26_url');
-  const pass=document.getElementById('cfg-pass').value.trim();
-  if(pass.length>=4) DB.adminPass=pass;
-  guardarDatos();cerrarModal('modal-config');setEstado('local');
-  toast('Modo local activado','ambar');
-}
-
-async function guardarConfig(){
-  const url=document.getElementById('cfg-url').value.trim();
-  const passVal=document.getElementById('cfg-pass').value.trim();
-  const pass=passVal||'admin2026';
-  document.getElementById('cfg-error').style.display='none';
-  if(!url){showErr('cfg-error','Pega la URL de Google Apps Script');return;}
-  if(!url.includes('script.google.com')){showErr('cfg-error','La URL debe ser de script.google.com/macros/s/.../exec');return;}
-  const btn=document.getElementById('btn-conectar');
-  btn.textContent='Probando conexión...';btn.disabled=true;
-  BURL=url;LOCAL=false;
-  localStorage.setItem('p26_url',url);localStorage.removeItem('p26_local');
-  DB.adminPass=pass;
-  try{
-    const r=await fetch(BURL+'?action=getData',{redirect:'follow'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const j=await r.json();
-    if(!j.ok) throw new Error('El script devolvió error');
-    DB=j.data; DB.adminPass=pass;
-    await guardarDatos();
-    cerrarModal('modal-config');
-    setEstado('ok');
-    toast('✓ Conectado exitosamente','verde');
-  }catch(e){
-    showErr('cfg-error',`No se pudo conectar: ${e.message}. Verifica: (1) URL correcta, (2) elegiste "Cualquier persona" en el acceso, (3) aceptaste los permisos de Google.`);
-    BURL='';localStorage.removeItem('p26_url');
-  }
-  btn.textContent='✓ Conectar';btn.disabled=false;
-}
-
-function copiarScript(){
-  const txt=document.getElementById('gas-code').textContent;
-  const f=()=>{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✓ Código copiado','verde');};
-  if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('✓ Código copiado','verde')).catch(f);}else f();
+async function cambiarPass(){
+  const np=document.getElementById('new-pass').value.trim();
+  const msgEl=document.getElementById('pass-msg');
+  if(np.length<4){msgEl.className='alert a-err';msgEl.textContent='La contraseña debe tener al menos 4 caracteres';msgEl.style.display='block';return;}
+  DB.adminPass=np;
+  const ok=await guardarDatos();
+  msgEl.className=ok?'alert a-ok':'alert a-warn';
+  msgEl.textContent=ok?'✓ Contraseña actualizada':'⚠ Guardado localmente (sin conexión)';
+  msgEl.style.display='block';
+  document.getElementById('new-pass').value='';
 }
 
 // ── NAVEGACIÓN ──
