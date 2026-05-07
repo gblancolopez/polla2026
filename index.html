@@ -162,28 +162,8 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
 </div>
 
 <!-- ════ ADMIN ════ -->
-<div id="pg-admin" class="pg">
-  <div id="admin-login-wrap">
-    <div class="card">
-      <div class="ct">⚙️ Panel de administrador</div>
-      <div class="alert a-info" style="margin-bottom:12px">
-        Solo el administrador accede a este panel. Introduce la contraseña para continuar.<br>
-        <strong>Contraseña por defecto:</strong> <code style="background:var(--gris-cl);padding:1px 5px;border-radius:4px">admin2026</code>
-      </div>
-      <div class="ig"><div class="lbl">Contraseña</div>
-        <input type="password" id="apass" placeholder="Contraseña..." onkeydown="if(event.key==='Enter')loginAdmin()">
-      </div>
-      <button class="btn btn-azul btn-full" style="margin-top:8px" onclick="loginAdmin()">Entrar al panel</button>
-      <div id="apass-err" class="alert a-err" style="display:none;margin-top:8px">Contraseña incorrecta</div>
-    </div>
-    <div class="card">
-      <div class="ct">🔧 Conexión a base de datos compartida</div>
-      <div id="config-status"><div class="flexi" style="gap:6px;font-size:13px;margin-bottom:8px"><span class="dot dot-warn"></span> Sin configurar</div></div>
-      <p style="font-size:12px;color:var(--gris);margin-bottom:10px">Para que todos puedan participar desde sus celulares, necesitas conectar una base de datos gratuita en Google. El botón de abajo te guía paso a paso.</p>
-      <button class="btn btn-azul btn-full" onclick="abrirModal('modal-config')">🔧 Configurar base de datos compartida</button>
-    </div>
-  </div>
-  <div id="admin-panel" style="display:none"></div>
+<div id="pg-admin" class="pg" style="display:none">
+  <div id="admin-panel"></div>
 </div>
 
 </main>
@@ -211,91 +191,7 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
   </div>
 </div>
 
-<!-- ══ MODAL: Configuración ══ -->
-<div class="modal-bg" id="modal-config">
-  <div class="modal" style="max-width:560px">
-    <h2>🔧 Configurar base de datos compartida</h2>
-    <div class="alert a-info" style="margin-bottom:14px">
-      <strong>¿Por qué necesitas esto?</strong><br>
-      Sin esto, los datos solo existen en tu dispositivo. Con esto, cada participante puede abrir la app en su celular y todos ven los mismos pronósticos y puntuaciones.
-    </div>
-
-    <div style="font-weight:700;font-size:13px;margin-bottom:10px">El administrador hace esto una sola vez:</div>
-
-    <div class="step"><span class="sn">1</span><div>
-      Abre <a href="https://script.google.com/home" target="_blank" style="color:var(--azul2);font-weight:700">script.google.com</a> con tu cuenta de Google. Haz clic en el botón azul <strong>"Nuevo proyecto"</strong>.
-    </div></div>
-
-    <div class="step"><span class="sn">2</span><div>
-      <div style="margin-bottom:6px">Borra el código que aparece y pega este (también puedes usar el botón copiar):</div>
-      <pre class="gas" id="gas-code">// POLLA MUNDIAL 2026 - Base de datos
-const CLAVE = 'polla2026_v1';
-
-function doGet(e) {
-  const props = PropertiesService.getScriptProperties();
-  const raw = props.getProperty(CLAVE);
-  const data = raw ? JSON.parse(raw) : initData();
-  return ContentService
-    .createTextOutput(JSON.stringify({ok:true, data}))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  try {
-    const body = JSON.parse(e.postData.contents);
-    if (body.action === 'setData') {
-      PropertiesService.getScriptProperties()
-        .setProperty(CLAVE, JSON.stringify(body.data));
-      return ContentService
-        .createTextOutput(JSON.stringify({ok:true}))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-  } catch(err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ok:false}))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function initData() {
-  return {participantes:[], pronosticos:{},
-          resultados:{}, adminPass:'admin2026'};
-}</pre>
-      <button class="btn btn-gris" style="font-size:12px;margin-top:4px" onclick="copiarScript()">📋 Copiar código</button>
-    </div></div>
-
-    <div class="step"><span class="sn">3</span><div>
-      Haz clic en el botón <strong>"Implementar"</strong> (ícono de nube con flecha arriba a la derecha) → <strong>"Nueva implementación"</strong>.<br>
-      <ul style="margin:6px 0 0 14px;font-size:12px;line-height:1.9;color:var(--negro)">
-        <li>En "Tipo" selecciona <strong>"Aplicación web"</strong></li>
-        <li>En "Ejecutar como" elige <strong>"Yo (tu email de Google)"</strong></li>
-        <li>En "Quién tiene acceso" elige <strong>"Cualquier persona"</strong></li>
-        <li>Haz clic en <strong>"Implementar"</strong> y acepta los permisos que pide</li>
-      </ul>
-    </div></div>
-
-    <div class="step"><span class="sn">4</span><div>
-      Google mostrará una <strong>"URL de la aplicación web"</strong>. Se ve así:<br>
-      <div style="background:var(--gris-cl);border:1px solid var(--gris-md);border-radius:var(--r-sm);padding:8px;font-size:11px;font-family:monospace;margin:5px 0;word-break:break-all">https://script.google.com/macros/s/AKfycb.../exec</div>
-      Copia esa URL completa y pégala abajo:
-    </div></div>
-
-    <div class="ig"><div class="lbl">URL de Google Apps Script</div>
-      <input type="text" id="cfg-url" placeholder="https://script.google.com/macros/s/.../exec">
-    </div>
-    <div class="ig"><div class="lbl">Contraseña de administrador (elige una nueva o deja la default)</div>
-      <input type="password" id="cfg-pass" placeholder="admin2026">
-    </div>
-    <div id="cfg-error" class="alert a-err" style="display:none;margin-bottom:8px"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <button class="btn btn-gris btn-full" onclick="usarLocal()">Modo local (solo este dispositivo)</button>
-      <button class="btn btn-verde btn-full" id="btn-conectar" onclick="guardarConfig()">✓ Conectar</button>
-    </div>
-    <div class="alert a-warn" style="margin-top:10px;font-size:11px">
-      <strong>Modo local:</strong> Los datos solo se guardan en este navegador. Si lo borras, se pierden. Sirve para probar pero no para compartir.
-    </div>
-  </div>
-</div>
+<!-- modal-config eliminado — URL hardcodeada, no se necesita configuración -->
 
 <script>
 const GRUPOS={
