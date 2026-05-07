@@ -97,17 +97,43 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
   <div class="huser" id="huser"></div>
 </header>
 
-<nav class="nav">
-  <button class="nb active" onclick="irA('ranking',this)">🏆 Clasificación</button>
-  <button class="nb" onclick="irA('pronosticos',this)">📝 Mis pronósticos</button>
-  <button class="nb" onclick="irA('vertodos',this)">👥 Ver todos</button>
-  <button class="nb" onclick="irA('admin',this)">⚙️ Admin</button>
+<nav class="nav" id="main-nav" style="display:none">
+  <button class="nb" id="nb-ranking" onclick="irA('ranking',this)">🏆 Clasificación</button>
+  <button class="nb" id="nb-pronosticos" onclick="irA('pronosticos',this)">📝 Mis pronósticos</button>
+  <button class="nb" id="nb-vertodos" onclick="irA('vertodos',this)">👥 Ver todos</button>
+  <button class="nb" id="nb-admin" style="display:none" onclick="irA('admin',this)">⚙️ Admin</button>
 </nav>
 
 <main>
 
+<!-- ════ LOGIN GLOBAL ════ -->
+<div id="pg-login" style="display:flex;align-items:center;justify-content:center;min-height:70vh;padding:16px">
+  <div style="width:100%;max-width:380px">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:52px;margin-bottom:8px">⚽</div>
+      <h2 style="font-size:20px;font-weight:700;color:var(--azul)">Polla Mundial FIFA 2026</h2>
+      <p style="font-size:13px;color:var(--gris);margin-top:6px">Inicia sesión para continuar</p>
+    </div>
+    <div class="card">
+      <div class="ig"><div class="lbl">Email / usuario</div>
+        <input type="text" id="gl-email" placeholder="tu@email.com" autocomplete="username"
+          onkeydown="if(event.key==='Enter')document.getElementById('gl-pass').focus()">
+      </div>
+      <div class="ig"><div class="lbl">Contraseña</div>
+        <input type="password" id="gl-pass" placeholder="Contraseña" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')loginGlobal()">
+      </div>
+      <div id="gl-err" class="alert a-err" style="display:none;margin-bottom:8px"></div>
+      <button class="btn btn-azul btn-full" onclick="loginGlobal()">Entrar</button>
+      <div style="font-size:11px;color:var(--gris);margin-top:10px;text-align:center">
+        El administrador ingresa con usuario <strong>admin</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ════ CLASIFICACIÓN ════ -->
-<div id="pg-ranking" class="pg active">
+<div id="pg-ranking" class="pg" style="display:none">
   <div class="grid4">
     <div class="scard"><div class="sv" style="color:#b45309">5</div><div class="sl">Marcador exacto</div></div>
     <div class="scard"><div class="sv" style="color:var(--azul2)">2</div><div class="sl">Ganador/empate</div></div>
@@ -125,13 +151,13 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
 </div>
 
 <!-- ════ PRONÓSTICOS ════ -->
-<div id="pg-pronosticos" class="pg">
+<div id="pg-pronosticos" class="pg" style="display:none">
   <div id="pron-login"></div>
   <div id="pron-form" style="display:none"></div>
 </div>
 
 <!-- ════ VER TODOS ════ -->
-<div id="pg-vertodos" class="pg">
+<div id="pg-vertodos" class="pg" style="display:none">
   <div id="vt-content"><div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">Cargando...</div></div>
 </div>
 
@@ -141,13 +167,20 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
     <div class="card">
       <div class="ct">⚙️ Panel de administrador</div>
       <div class="alert a-info" style="margin-bottom:12px">
-        Solo el administrador accede a este panel. Introduce la contraseña para continuar.
+        Solo el administrador accede a este panel. Introduce la contraseña para continuar.<br>
+        <strong>Contraseña por defecto:</strong> <code style="background:var(--gris-cl);padding:1px 5px;border-radius:4px">admin2026</code>
       </div>
       <div class="ig"><div class="lbl">Contraseña</div>
         <input type="password" id="apass" placeholder="Contraseña..." onkeydown="if(event.key==='Enter')loginAdmin()">
       </div>
       <button class="btn btn-azul btn-full" style="margin-top:8px" onclick="loginAdmin()">Entrar al panel</button>
       <div id="apass-err" class="alert a-err" style="display:none;margin-top:8px">Contraseña incorrecta</div>
+    </div>
+    <div class="card">
+      <div class="ct">🔧 Conexión a base de datos compartida</div>
+      <div id="config-status"><div class="flexi" style="gap:6px;font-size:13px;margin-bottom:8px"><span class="dot dot-warn"></span> Sin configurar</div></div>
+      <p style="font-size:12px;color:var(--gris);margin-bottom:10px">Para que todos puedan participar desde sus celulares, necesitas conectar una base de datos gratuita en Google. El botón de abajo te guía paso a paso.</p>
+      <button class="btn btn-azul btn-full" onclick="abrirModal('modal-config')">🔧 Configurar base de datos compartida</button>
     </div>
   </div>
   <div id="admin-panel" style="display:none"></div>
@@ -178,7 +211,91 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
   </div>
 </div>
 
-<!-- Modal de configuración eliminado — URL hardcodeada en el script -->
+<!-- ══ MODAL: Configuración ══ -->
+<div class="modal-bg" id="modal-config">
+  <div class="modal" style="max-width:560px">
+    <h2>🔧 Configurar base de datos compartida</h2>
+    <div class="alert a-info" style="margin-bottom:14px">
+      <strong>¿Por qué necesitas esto?</strong><br>
+      Sin esto, los datos solo existen en tu dispositivo. Con esto, cada participante puede abrir la app en su celular y todos ven los mismos pronósticos y puntuaciones.
+    </div>
+
+    <div style="font-weight:700;font-size:13px;margin-bottom:10px">El administrador hace esto una sola vez:</div>
+
+    <div class="step"><span class="sn">1</span><div>
+      Abre <a href="https://script.google.com/home" target="_blank" style="color:var(--azul2);font-weight:700">script.google.com</a> con tu cuenta de Google. Haz clic en el botón azul <strong>"Nuevo proyecto"</strong>.
+    </div></div>
+
+    <div class="step"><span class="sn">2</span><div>
+      <div style="margin-bottom:6px">Borra el código que aparece y pega este (también puedes usar el botón copiar):</div>
+      <pre class="gas" id="gas-code">// POLLA MUNDIAL 2026 - Base de datos
+const CLAVE = 'polla2026_v1';
+
+function doGet(e) {
+  const props = PropertiesService.getScriptProperties();
+  const raw = props.getProperty(CLAVE);
+  const data = raw ? JSON.parse(raw) : initData();
+  return ContentService
+    .createTextOutput(JSON.stringify({ok:true, data}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    if (body.action === 'setData') {
+      PropertiesService.getScriptProperties()
+        .setProperty(CLAVE, JSON.stringify(body.data));
+      return ContentService
+        .createTextOutput(JSON.stringify({ok:true}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ok:false}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function initData() {
+  return {participantes:[], pronosticos:{},
+          resultados:{}, adminPass:'admin2026'};
+}</pre>
+      <button class="btn btn-gris" style="font-size:12px;margin-top:4px" onclick="copiarScript()">📋 Copiar código</button>
+    </div></div>
+
+    <div class="step"><span class="sn">3</span><div>
+      Haz clic en el botón <strong>"Implementar"</strong> (ícono de nube con flecha arriba a la derecha) → <strong>"Nueva implementación"</strong>.<br>
+      <ul style="margin:6px 0 0 14px;font-size:12px;line-height:1.9;color:var(--negro)">
+        <li>En "Tipo" selecciona <strong>"Aplicación web"</strong></li>
+        <li>En "Ejecutar como" elige <strong>"Yo (tu email de Google)"</strong></li>
+        <li>En "Quién tiene acceso" elige <strong>"Cualquier persona"</strong></li>
+        <li>Haz clic en <strong>"Implementar"</strong> y acepta los permisos que pide</li>
+      </ul>
+    </div></div>
+
+    <div class="step"><span class="sn">4</span><div>
+      Google mostrará una <strong>"URL de la aplicación web"</strong>. Se ve así:<br>
+      <div style="background:var(--gris-cl);border:1px solid var(--gris-md);border-radius:var(--r-sm);padding:8px;font-size:11px;font-family:monospace;margin:5px 0;word-break:break-all">https://script.google.com/macros/s/AKfycb.../exec</div>
+      Copia esa URL completa y pégala abajo:
+    </div></div>
+
+    <div class="ig"><div class="lbl">URL de Google Apps Script</div>
+      <input type="text" id="cfg-url" placeholder="https://script.google.com/macros/s/.../exec">
+    </div>
+    <div class="ig"><div class="lbl">Contraseña de administrador (elige una nueva o deja la default)</div>
+      <input type="password" id="cfg-pass" placeholder="admin2026">
+    </div>
+    <div id="cfg-error" class="alert a-err" style="display:none;margin-bottom:8px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="btn btn-gris btn-full" onclick="usarLocal()">Modo local (solo este dispositivo)</button>
+      <button class="btn btn-verde btn-full" id="btn-conectar" onclick="guardarConfig()">✓ Conectar</button>
+    </div>
+    <div class="alert a-warn" style="margin-top:10px;font-size:11px">
+      <strong>Modo local:</strong> Los datos solo se guardan en este navegador. Si lo borras, se pierden. Sirve para probar pero no para compartir.
+    </div>
+  </div>
+</div>
 
 <script>
 const GRUPOS={
@@ -203,31 +320,34 @@ const AVC=[
 ];
 
 let DB={participantes:[],pronosticos:{},resultados:{},adminPass:'admin2026'};
-let UID=null, ADMIN=false, LOCAL=false;
+let UID=null, ADMIN=false;
 
-// Hash simple djb2 — protege contraseñas de usuarios en la base de datos
+// Hash simple djb2 — las contraseñas nunca se guardan en texto plano
 function hash(str){
   let h=5381;
   for(let i=0;i<str.length;i++) h=((h<<5)+h)+str.charCodeAt(i);
   return (h>>>0).toString(36);
 }
 
-// ── URL fija de la base de datos — no tocar ──
 const BURL='https://script.google.com/macros/s/AKfycbzWqhQFkE4m73-WQ2cfxIOBPhb4GvPdyzco9U00csqbyQjYPZyZ0jZjXRctS9NKYVI/exec';
 
 // ── INICIO ──
 async function init(){
   await cargarDatos();
-  // Restaurar sesión guardada solo si el uid sigue existiendo en DB
-  const savedUID = localStorage.getItem('p26_uid');
-  if(savedUID && DB.participantes.find(x=>x.id===savedUID)){
-    UID = savedUID;
+  // Restaurar sesión guardada
+  const savedAdmin=localStorage.getItem('p26_admin')==='1';
+  const savedUID=localStorage.getItem('p26_uid')||null;
+  if(savedAdmin){
+    ADMIN=true; UID='__admin__';
+    mostrarAppAdmin();
+  } else if(savedUID && DB.participantes.find(x=>x.id===savedUID)){
+    UID=savedUID;
+    mostrarAppUsuario();
   } else {
     localStorage.removeItem('p26_uid');
-    UID = null;
+    localStorage.removeItem('p26_admin');
+    // Mostrar login (ya visible por defecto en HTML)
   }
-  actualizarHeader();
-  renderRanking();
 }
 
 function cargarCache(){
@@ -241,10 +361,8 @@ async function cargarDatos(){
     const j=await r.json();
     if(!j.ok) throw new Error('Respuesta inválida');
     DB=j.data; localStorage.setItem('p26_db',JSON.stringify(DB));
-    setEstado('ok');
   }catch(e){
-    // Sin conexión: usar caché local como respaldo
-    cargarCache(); setEstado('error',e.message);
+    cargarCache();
   }
 }
 
@@ -258,13 +376,79 @@ async function guardarDatos(){
   }catch(e){return false;}
 }
 
-function setEstado(s,msg){
-  const el=document.getElementById('estado-backend'); if(!el) return;
-  const msgs={
-    ok:'',
-    error:`<div class="alert a-warn" style="font-size:12px">⚠ Sin conexión al servidor. Mostrando datos del caché local — puede no estar actualizado.</div>`
-  };
-  el.innerHTML=msgs[s]||'';
+// setEstado ya no se usa activamente — se mantiene por compatibilidad
+function setEstado(s,msg){}
+
+// ── LOGIN GLOBAL ──
+async function loginGlobal(){
+  const email=document.getElementById('gl-email').value.trim().toLowerCase();
+  const pass=document.getElementById('gl-pass').value;
+  const errEl=document.getElementById('gl-err');
+  errEl.style.display='none';
+  if(!email||!pass){errEl.textContent='Completa email y contraseña';errEl.style.display='block';return;}
+
+  // Admin: usuario "admin" con la contraseña adminPass
+  if(email==='admin'||email==='admin@polla2026'){
+    if(pass===DB.adminPass){
+      ADMIN=true; UID='__admin__';
+      localStorage.setItem('p26_admin','1');
+      localStorage.removeItem('p26_uid');
+      mostrarAppAdmin();
+    } else {
+      errEl.textContent='Contraseña de administrador incorrecta';errEl.style.display='block';
+    }
+    return;
+  }
+
+  // Usuario normal: email + passHash
+  const p=DB.participantes.find(x=>x.email.toLowerCase()===email);
+  if(!p){errEl.textContent='Email no encontrado. Verifica con el administrador.';errEl.style.display='block';return;}
+  if(!p.passHash){errEl.textContent='Sin contraseña asignada. Contacta al administrador.';errEl.style.display='block';return;}
+  if(p.passHash!==hash(pass)){errEl.textContent='Contraseña incorrecta.';errEl.style.display='block';return;}
+  ADMIN=false; UID=p.id;
+  localStorage.setItem('p26_uid',UID);
+  localStorage.removeItem('p26_admin');
+  mostrarAppUsuario();
+}
+
+function mostrarLogin(){
+  document.getElementById('main-nav').style.display='none';
+  document.querySelectorAll('.pg').forEach(p=>p.style.display='none');
+  document.getElementById('pg-login').style.display='flex';
+  const e=document.getElementById('gl-email'),p=document.getElementById('gl-pass');
+  if(e)e.value=''; if(p)p.value='';
+  const err=document.getElementById('gl-err');if(err)err.style.display='none';
+}
+
+function mostrarAppUsuario(){
+  document.getElementById('pg-login').style.display='none';
+  const nav=document.getElementById('main-nav');
+  nav.style.display='flex';
+  document.getElementById('nb-admin').style.display='none';
+  document.getElementById('nb-ranking').style.display='';
+  document.getElementById('nb-pronosticos').style.display='';
+  document.getElementById('nb-vertodos').style.display='';
+  actualizarHeader();
+  irA('ranking',document.getElementById('nb-ranking'));
+}
+
+function mostrarAppAdmin(){
+  document.getElementById('pg-login').style.display='none';
+  const nav=document.getElementById('main-nav');
+  nav.style.display='flex';
+  document.getElementById('nb-admin').style.display='';
+  document.getElementById('nb-ranking').style.display='none';
+  document.getElementById('nb-pronosticos').style.display='none';
+  document.getElementById('nb-vertodos').style.display='none';
+  actualizarHeader();
+  irA('admin',document.getElementById('nb-admin'));
+}
+
+function cerrarSesion(){
+  UID=null; ADMIN=false;
+  localStorage.removeItem('p26_uid');
+  localStorage.removeItem('p26_admin');
+  mostrarLogin();
 }
 
 // ── LÓGICA FIFA ──
@@ -358,45 +542,8 @@ function renderRanking(){
 
 // ── PRONÓSTICOS ──
 function renderPronosticos(){
-  if(!UID){mostrarLoginPron();}
-  else{const p=DB.participantes.find(x=>x.id===UID);if(p)mostrarFormPron(p);else{UID=null;mostrarLoginPron();}}
-}
-
-function mostrarLoginPron(){
-  document.getElementById('pron-login').style.display='block';
-  document.getElementById('pron-form').style.display='none';
-  let h=`<div class="card">
-    <div class="ct">🔐 Iniciar sesión</div>
-    <p style="font-size:13px;color:var(--gris);margin-bottom:14px">
-      Ingresa con el email y la contraseña que te asignó el administrador.
-    </p>
-    <div class="ig"><div class="lbl">Email / usuario</div>
-      <input type="text" id="login-email" placeholder="tu@email.com" autocomplete="username"
-        onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
-    </div>
-    <div class="ig"><div class="lbl">Contraseña</div>
-      <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password"
-        onkeydown="if(event.key==='Enter')loginUsuario()">
-    </div>
-    <div id="login-err" class="alert a-err" style="display:none;margin-bottom:8px"></div>
-    <button class="btn btn-azul btn-full" onclick="loginUsuario()">Entrar</button>
-    ${!DB.participantes.length?'<div class="alert a-warn" style="margin-top:10px">El administrador aún no ha registrado participantes.</div>':''}
-  </div>`;
-  document.getElementById('pron-login').innerHTML=h;
-}
-
-function loginUsuario(){
-  const email=document.getElementById('login-email').value.trim().toLowerCase();
-  const pass=document.getElementById('login-pass').value;
-  const errEl=document.getElementById('login-err');
-  if(!email||!pass){errEl.textContent='Completa email y contraseña';errEl.style.display='block';return;}
-  const p=DB.participantes.find(x=>x.email.toLowerCase()===email);
-  if(!p){errEl.textContent='Email no encontrado. Verifica con el administrador.';errEl.style.display='block';return;}
-  if(p.passHash!==hash(pass)){errEl.textContent='Contraseña incorrecta.';errEl.style.display='block';return;}
-  UID=p.id;
-  localStorage.setItem('p26_uid',UID);
-  actualizarHeader();
-  renderPronosticos();
+  const p=DB.participantes.find(x=>x.id===UID);
+  if(p) mostrarFormPron(p);
 }
 
 function mostrarFormPron(p){
@@ -409,13 +556,13 @@ function mostrarFormPron(p){
   h+=`<div class="card">
     <div class="flexi" style="margin-bottom:10px">
       <span class="ct" style="margin:0">Pronósticos — ${p.nombre}</span>
-      <button class="btn btn-gris" style="font-size:11px;padding:5px 10px" onclick="salirU()">Cambiar usuario</button>
     </div>
     <div class="gtabs" id="ptabs">`;
   Object.keys(GRUPOS).forEach((g,i)=>{
     const n=contarIngs(UID,g);
-    const badge=n>0?'<span style="font-size:9px;background:var(--verde-cl);color:var(--verde-dk);border-radius:99px;padding:0 3px;margin-left:2px">'+n+'</span>':'';
-    h+='<button class="gtab '+(i===0?'active':'')+'" id="ptab-'+g+'" onclick="mostrarGrupoPron(\''+g+'\',this)">'+g+badge+'</button>';
+    h+=`<button class="gtab ${i===0?'active':''}" id="ptab-${g}" onclick="mostrarGrupoPron('${g}',this)">
+      ${g}${n>0?`<span style="font-size:9px;background:var(--verde-cl);color:var(--verde-dk);border-radius:99px;padding:0 3px;margin-left:2px">${n}</span>`:''}
+    </button>`;
   });
   h+=`</div><div id="gpron-body"></div>`;
   if(!locked) h+=`<div style="margin-top:14px;display:flex;justify-content:flex-end;align-items:center;gap:8px">
@@ -453,20 +600,18 @@ function mostrarGrupoPron(g,btn){
   ps.forEach(p=>{
     const key=pk(p.local,p.vis),pr=pG[key]||{},re=rG[key]||{};
     const tieneR=re.g1!==undefined&&re.g1!=='';
-    const scoreHtml=locked
-      ?'<span class="sval">'+(pr.g1??'—')+'</span><span class="sdash">—</span><span class="sval">'+(pr.g2??'—')+'</span>'
-      :'<input class="sinp" type="number" min="0" max="20" value="'+(pr.g1??'')+'"'
-        +' oninput="sp(\''+g+'\',\''+key+'\',\'g1\',this.value);tviva(\''+g+'\');actCnt()" id="i_'+g+'_'+key+'_g1">'
-        +'<span class="sdash">—</span>'
-        +'<input class="sinp" type="number" min="0" max="20" value="'+(pr.g2??'')+'"'
-        +' oninput="sp(\''+g+'\',\''+key+'\',\'g2\',this.value);tviva(\''+g+'\');actCnt()" id="i_'+g+'_'+key+'_g2">';
-    const realBadge=tieneR?'<span class="badge b-gris" style="font-size:10px;margin-left:2px;flex-shrink:0">'+re.g1+'—'+re.g2+'</span>':'';
-    h+='<div class="match-row">'
-      +'<span class="eq r" title="'+p.local+'">'+p.local+'</span>'
-      +scoreHtml
-      +'<span class="eq" title="'+p.vis+'">'+p.vis+'</span>'
-      +realBadge
-      +'</div>';
+    h+=`<div class="match-row">
+      <span class="eq r" title="${p.local}">${p.local}</span>
+      ${locked
+        ?`<span class="sval">${pr.g1??'—'}</span><span class="sdash">—</span><span class="sval">${pr.g2??'—'}</span>`
+        :`<input class="sinp" type="number" min="0" max="20" value="${pr.g1??''}"
+           oninput="sp('${g}','${key}','g1',this.value);tviva('${g}');actCnt()" id="i_${g}_${key}_g1">
+          <span class="sdash">—</span>
+          <input class="sinp" type="number" min="0" max="20" value="${pr.g2??''}"
+           oninput="sp('${g}','${key}','g2',this.value);tviva('${g}');actCnt()" id="i_${g}_${key}_g2">`}
+      <span class="eq" title="${p.vis}">${p.vis}</span>
+      ${tieneR?`<span class="badge b-gris" style="font-size:10px;margin-left:2px;flex-shrink:0">${re.g1}—${re.g2}</span>`:''}
+    </div>`;
   });
   h+=`</div><div>
     <div class="lbl" style="margin-bottom:6px">Clasificación provisional</div>
@@ -525,12 +670,7 @@ async function confirmarEnvio(){
   renderPronosticos(); renderRanking();
 }
 
-function salirU(){
-  UID=null;
-  localStorage.removeItem('p26_uid');
-  actualizarHeader();
-  renderPronosticos();
-}
+// salirU reemplazado por cerrarSesion() en el header
 
 // ── VER TODOS ──
 function renderVerTodos(){
@@ -592,18 +732,7 @@ function vtG(g,btn){
   document.getElementById('vt-gbody').innerHTML=h;
 }
 
-// ── ADMIN ──
-function loginAdmin(){
-  const pass=document.getElementById('apass').value;
-  if(pass===DB.adminPass){
-    ADMIN=true;
-    document.getElementById('admin-login-wrap').style.display='none';
-    document.getElementById('admin-panel').style.display='block';
-    renderAdmin();
-  } else {
-    document.getElementById('apass-err').style.display='block';
-  }
-}
+// ── ADMIN ── (el login de admin es ahora el login global)
 
 function renderAdmin(){
   let h=`
@@ -616,25 +745,21 @@ function renderAdmin(){
       <div><div class="lbl">Nombre completo</div><input type="text" id="np-n" placeholder="Nombre Apellido"></div>
       <div><div class="lbl">Email / usuario</div><input type="text" id="np-e" placeholder="email@..."></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;align-items:end">
       <div><div class="lbl">Contraseña inicial</div><input type="text" id="np-p" placeholder="Ej: Mundial2026"></div>
-      <div style="display:flex;align-items:flex-end">
-        <button class="btn btn-gris btn-full" style="margin-bottom:0" onclick="generarPass()">🎲 Generar</button>
-      </div>
+      <button class="btn btn-gris" onclick="generarPass()">🎲 Generar</button>
     </div>
-    <div class="alert a-info" style="font-size:12px;margin-bottom:8px">
-      Anota o comparte el email + contraseña con cada participante. Es la única forma de que puedan entrar.
-    </div>
+    <div class="alert a-info" style="font-size:12px;margin-bottom:8px">El participante usará su email + esta contraseña para iniciar sesión.</div>
     <button class="btn btn-azul" onclick="addP()">+ Añadir participante</button>
-    <div id="ap-err" class="alert a-err" style="display:none;margin-top:8px"></div>
+    <div id="ap-err" style="display:none;margin-top:8px"></div>
   </div>
   <div class="card">
     <div class="ct">🔑 Cambiar contraseña de administrador</div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
-      <div><div class="lbl">Nueva contraseña</div><input type="password" id="new-pass" placeholder="Mínimo 4 caracteres"></div>
-      <button class="btn btn-azul" onclick="cambiarPass()">Guardar</button>
+      <div><div class="lbl">Nueva contraseña</div><input type="password" id="new-apass" placeholder="Nueva contraseña"></div>
+      <button class="btn btn-azul" onclick="cambiarPassAdmin()">Guardar</button>
     </div>
-    <div id="pass-msg" style="display:none;margin-top:8px"></div>
+    <div id="apass-change-msg" style="display:none;margin-top:8px"></div>
   </div>
   <div class="card">
     <div class="ct">📊 Resultados reales</div>
@@ -655,62 +780,67 @@ function renderAPLista(){
   if(!DB.participantes.length){el.innerHTML='<div style="color:var(--gris);font-size:13px">Sin participantes.</div>';return;}
   el.innerHTML=DB.participantes.map(p=>{
     const [bg,fg]=avc(p.id);
-    const btnDesbloquear=p.bloqueado
-      ?'<button class="btn btn-gris" style="font-size:11px;padding:4px 8px" onclick="desblq(\''+p.id+'\')">🔓 Desbloquear</button>'
-      :'';
-    return'<div class="rrow">'
-      +'<div class="av" style="width:32px;height:32px;font-size:12px;background:'+bg+';color:'+fg+'">'+inic(p.nombre)+'</div>'
-      +'<div style="flex:1">'
-        +'<div style="font-weight:700;font-size:13px">'+p.nombre+'</div>'
-        +'<div style="font-size:12px;color:var(--gris)">'+p.email+' · '+(p.bloqueado?'✓ Enviado':'Pendiente')+'</div>'
-      +'</div>'
-      +'<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">'
-        +'<button class="btn btn-gris" style="font-size:11px;padding:4px 8px" onclick="resetPass(\''+p.id+'\')">🔑 Nueva clave</button>'
-        +btnDesbloquear
-        +'<button class="btn btn-rojo" style="font-size:11px;padding:4px 8px" onclick="delP(\''+p.id+'\')">✕</button>'
-      +'</div>'
-    +'</div>';
+    const btnDesblq=p.bloqueado?'<button class="btn btn-gris" style="font-size:11px;padding:4px 8px" onclick="desblq(\''+p.id+'\')">🔓 Desbloquear</button>':'';
+    const btnReset='<button class="btn btn-gris" style="font-size:11px;padding:4px 8px" onclick="resetPassP(\''+p.id+'\')">🔑 Clave</button>';
+    const btnDel='<button class="btn btn-rojo" style="font-size:11px;padding:4px 8px" onclick="delP(\''+p.id+'\')">✕</button>';
+    return '<div class="rrow">'+
+      '<div class="av" style="width:32px;height:32px;font-size:12px;background:'+bg+';color:'+fg+'">'+inic(p.nombre)+'</div>'+
+      '<div style="flex:1"><div style="font-weight:700;font-size:13px">'+p.nombre+'</div>'+
+      '<div style="font-size:12px;color:var(--gris)">'+p.email+' · '+(p.bloqueado?'✓ Enviado':'Pendiente')+'</div></div>'+
+      '<div style="display:flex;gap:4px">'+btnReset+btnDesblq+btnDel+'</div></div>';
   }).join('');
 }
 
 function generarPass(){
-  const words=['Gol','Mundial','2026','FIFA','Copa','Polla','Campeón','Final','Cancha'];
-  const nums=Math.floor(100+Math.random()*900);
-  const w=words[Math.floor(Math.random()*words.length)];
-  document.getElementById('np-p').value=w+nums;
+  const w=['Gol','Copa','FIFA','Polla','Final','Mundial'];
+  const n=Math.floor(100+Math.random()*900);
+  const el=document.getElementById('np-p');
+  if(el) el.value=w[Math.floor(Math.random()*w.length)]+n;
 }
 
 async function addP(){
   const nombre=document.getElementById('np-n').value.trim();
   const email=document.getElementById('np-e').value.trim();
   const pass=document.getElementById('np-p').value.trim();
-  if(!nombre||!email||!pass){showErr('ap-err','Nombre, email y contraseña son obligatorios');return;}
-  if(DB.participantes.length>=40){showErr('ap-err','Máximo 40 participantes');return;}
-  if(DB.participantes.find(x=>x.email.toLowerCase()===email.toLowerCase())){showErr('ap-err','Ya existe ese email');return;}
+  const errEl=document.getElementById('ap-err');
+  if(!nombre||!email||!pass){
+    errEl.className='alert a-err';errEl.textContent='Nombre, email y contraseña son obligatorios';errEl.style.display='block';return;
+  }
+  if(DB.participantes.length>=40){errEl.className='alert a-err';errEl.textContent='Máximo 40 participantes';errEl.style.display='block';return;}
+  if(DB.participantes.find(x=>x.email.toLowerCase()===email.toLowerCase())){
+    errEl.className='alert a-err';errEl.textContent='Ya existe ese email';errEl.style.display='block';return;
+  }
   const id='u'+Date.now()+Math.random().toString(36).slice(2,5);
-  DB.participantes.push({id, nombre, email, passHash:hash(pass), bloqueado:false});
-  // Mostrar credenciales al admin antes de limpiar el formulario
-  const msgDiv=document.getElementById('ap-err');
+  DB.participantes.push({id,nombre,email,passHash:hash(pass),bloqueado:false});
   document.getElementById('np-n').value='';
   document.getElementById('np-e').value='';
   document.getElementById('np-p').value='';
-  msgDiv.className='alert a-ok';
-  msgDiv.innerHTML=`✓ Participante añadido.<br>
-    <strong>Comparte estas credenciales con ${nombre}:</strong><br>
-    📧 Email: <strong>${email}</strong><br>
-    🔑 Contraseña: <strong>${pass}</strong>`;
-  msgDiv.style.display='block';
   await guardarDatos(); renderAPLista(); renderRanking();
+  errEl.className='alert a-ok';
+  errEl.innerHTML='✓ Añadido. Comparte con '+nombre+':<br><strong>Email:</strong> '+email+' &nbsp; <strong>Contraseña:</strong> '+pass;
+  errEl.style.display='block';
 }
 
-async function resetPass(uid){
+async function resetPassP(uid){
   const p=DB.participantes.find(x=>x.id===uid);if(!p)return;
-  const np=prompt(`Nueva contraseña para ${p.nombre}:`);
-  if(!np||np.trim().length<3){alert('Contraseña demasiado corta');return;}
+  const np=prompt('Nueva contraseña para '+p.nombre+':');
+  if(!np||np.trim().length<3){alert('Contraseña muy corta');return;}
   p.passHash=hash(np.trim());
   const ok=await guardarDatos();
-  if(ok) alert(`✓ Contraseña actualizada.\nComunica a ${p.nombre}:\nEmail: ${p.email}\nNueva contraseña: ${np.trim()}`);
-  else alert('⚠ Error guardando. Intenta de nuevo.');
+  if(ok) alert('✓ Contraseña actualizada.\nEmail: '+p.email+'\nNueva contraseña: '+np.trim());
+  else alert('⚠ Error guardando.');
+}
+
+async function cambiarPassAdmin(){
+  const np=document.getElementById('new-apass').value.trim();
+  const msgEl=document.getElementById('apass-change-msg');
+  if(np.length<4){msgEl.className='alert a-err';msgEl.textContent='Mínimo 4 caracteres';msgEl.style.display='block';return;}
+  DB.adminPass=np;
+  const ok=await guardarDatos();
+  msgEl.className=ok?'alert a-ok':'alert a-warn';
+  msgEl.textContent=ok?'✓ Contraseña de admin actualizada. Próximo login usa la nueva.':' ⚠ Error guardando';
+  msgEl.style.display='block';
+  document.getElementById('new-apass').value='';
 }
 
 async function delP(uid){
@@ -777,25 +907,15 @@ async function guardarRes(g){
   toast(ok?`✓ Resultados grupo ${g} guardados`:'⚠ Guardado localmente',ok?'verde':'ambar');
 }
 
-async function cambiarPass(){
-  const np=document.getElementById('new-pass').value.trim();
-  const msgEl=document.getElementById('pass-msg');
-  if(np.length<4){msgEl.className='alert a-err';msgEl.textContent='La contraseña debe tener al menos 4 caracteres';msgEl.style.display='block';return;}
-  DB.adminPass=np;
-  const ok=await guardarDatos();
-  msgEl.className=ok?'alert a-ok':'alert a-warn';
-  msgEl.textContent=ok?'✓ Contraseña actualizada':'⚠ Guardado localmente (sin conexión)';
-  msgEl.style.display='block';
-  document.getElementById('new-pass').value='';
-}
+// Configuración eliminada — URL hardcodeada
 
 // ── NAVEGACIÓN ──
 function irA(page,btn){
-  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.pg').forEach(p=>p.style.display='none');
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
-  document.getElementById('pg-'+page).classList.add('active');
-  btn.classList.add('active');
-  const r={ranking:renderRanking,pronosticos:renderPronosticos,vertodos:renderVerTodos,admin:()=>{if(ADMIN)renderAdmin();}};
+  document.getElementById('pg-'+page).style.display='block';
+  if(btn)btn.classList.add('active');
+  const r={ranking:renderRanking,pronosticos:renderPronosticos,vertodos:renderVerTodos,admin:renderAdmin};
   if(r[page])r[page]();
 }
 
@@ -807,10 +927,15 @@ function cerrarModal(id){document.getElementById(id).classList.remove('open');}
 function showErr(id,msg){const e=document.getElementById(id);if(e){e.textContent=msg;e.style.display='block';}}
 function actualizarHeader(){
   const el=document.getElementById('huser');if(!el)return;
+  const salirBtn='<button onclick="cerrarSesion()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700;margin-left:6px">Salir</button>';
+  if(ADMIN){
+    el.innerHTML='<span style="font-size:12px">⚙️ Admin</span>'+salirBtn;
+    return;
+  }
   if(!UID){el.innerHTML='';return;}
   const p=DB.participantes.find(x=>x.id===UID);if(!p){el.innerHTML='';return;}
   const [bg,fg]=avc(p.id);
-  el.innerHTML=`<div class="av" style="width:26px;height:26px;font-size:11px;background:${bg};color:${fg}">${inic(p.nombre)}</div><span>${p.nombre.split(' ')[0]}</span>`;
+  el.innerHTML='<div class="av" style="width:26px;height:26px;font-size:11px;background:'+bg+';color:'+fg+'">'+inic(p.nombre)+'</div><span>'+p.nombre.split(' ')[0]+'</span>'+salirBtn;
 }
 let _tt;
 function toast(msg,color='verde'){
