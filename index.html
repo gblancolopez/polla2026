@@ -101,6 +101,7 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
   <button class="nb" id="nb-ranking" onclick="irA('ranking',this)">🏆 Clasificación</button>
   <button class="nb" id="nb-pronosticos" onclick="irA('pronosticos',this)">📝 Mis pronósticos</button>
   <button class="nb" id="nb-vertodos" onclick="irA('vertodos',this)">👥 Ver todos</button>
+  <button class="nb" id="nb-elim" style="display:none" onclick="irA('elim',this)">🔥 Eliminatorias</button>
   <button class="nb" id="nb-admin" style="display:none" onclick="irA('admin',this)">⚙️ Admin</button>
 </nav>
 
@@ -160,6 +161,11 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
   <div id="vt-content"><div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">Cargando...</div></div>
 </div>
 
+<!-- ════ ELIMINATORIAS ════ -->
+<div id="pg-elim" class="pg" style="display:none">
+  <div id="elim-content"></div>
+</div>
+
 <!-- ════ ADMIN ════ -->
 <div id="pg-admin" class="pg" style="display:none">
   <div id="admin-panel"></div>
@@ -190,6 +196,17 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
   </div>
 </div>
 
+<!-- ══ MODAL: Confirmar bracket eliminatorio ══ -->
+<div class="modal-bg" id="modal-confirm-elim">
+  <div class="modal">
+    <h2>⚠️ Confirmar envío del bracket</h2>
+    <div class="alert a-warn">Una vez enviado tu bracket eliminatorio queda <strong>bloqueado definitivamente</strong>.</div>
+    <div class="flexi" style="gap:8px;margin-top:14px">
+      <button class="btn btn-gris f1" onclick="cerrarModal('modal-confirm-elim')">Revisar más</button>
+      <button class="btn btn-verde f1" onclick="confirmarEnvioElim()">✓ Enviar bracket</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const GRUPOS={
@@ -322,6 +339,8 @@ function mostrarAppUsuario(){
   document.getElementById('nb-ranking').style.display='';
   document.getElementById('nb-pronosticos').style.display='';
   document.getElementById('nb-vertodos').style.display='';
+  document.getElementById('nb-elim').style.display='';
+  document.getElementById('nb-admin').style.display='none';
   actualizarHeader();
   irA('ranking',document.getElementById('nb-ranking'));
 }
@@ -331,6 +350,7 @@ function mostrarAppAdmin(){
   const nav=document.getElementById('main-nav');
   nav.style.display='flex';
   document.getElementById('nb-admin').style.display='';
+  document.getElementById('nb-elim') && (document.getElementById('nb-elim').style.display='none');
   document.getElementById('nb-ranking').style.display='none';
   document.getElementById('nb-pronosticos').style.display='none';
   document.getElementById('nb-vertodos').style.display='none';
@@ -396,47 +416,63 @@ function calcPuntos(pron,res){
       if(t3P[i]===t3R[i]) pG+=3; else if(t3R.includes(t3P[i])) pG+=2;
     });
   });
-  return{pM,pG,pT:0,total:pM+pG};
+  return{pM,pG,total:pM+pG};
 }
 
 // ── RANKING ──
 function renderRanking(){
   document.getElementById('badge-np').textContent=DB.participantes.length+' participantes';
-  const hayResultados=Object.keys(DB.resultados).some(g=>
-    Object.keys(DB.resultados[g]||{}).some(k=>{
-      const re=DB.resultados[g][k];
-      return re&&re.g1!==undefined&&re.g1!=='';
-    })
-  );
-  const rows=DB.participantes.map(p=>{
+  const hayResGrupos=Object.keys(DB.resultados||{}).some(g=>
+    Object.keys(DB.resultados[g]||{}).some(k=>{const re=DB.resultados[g][k];return re&&re.g1!==undefined&&re.g1!=='';}));
+  const hayResElim=Object.keys(DB.resultadosElim||{}).some(k=>{
+    const re=(DB.resultadosElim||{})[k];return re&&re.g1!==undefined&&re.g1!=='';});
+
+  const rowsG=DB.participantes.map(p=>{
     const r=calcPuntos(DB.pronosticos[p.id]||{},DB.resultados);
-    return{...p,...r};
-  }).sort((a,b)=>hayResultados?b.total-a.total:a.nombre.localeCompare(b.nombre));
-  let h='';
-  if(!rows.length){h='<div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">El administrador debe añadir participantes en la pestaña Admin.</div>';}
-  else rows.forEach((p,i)=>{
+    return{...p,pts:r.total,pM:r.pM,pG:r.pG};
+  }).sort((a,b)=>hayResGrupos?b.pts-a.pts:a.nombre.localeCompare(b.nombre));
+
+  const rowsE=DB.participantes.map(p=>{
+    const r=calcPuntosElim(DB.pronosticosElim?.[p.id]||{},DB.resultadosElim||{});
+    return{...p,pts:r.total,pM:r.pM,pA:r.pA};
+  }).sort((a,b)=>hayResElim?b.pts-a.pts:a.nombre.localeCompare(b.nombre));
+
+  function filaRanking(p,i,hayRes,cols){
     const [bg,fg]=avc(p.id);
-    const posNum=hayResultados?`<div class="rnum">${i+1}</div>`:'<div class="rnum" style="color:var(--gris-md)">—</div>';
-    const posClass=hayResultados&&i<3?'r'+(i+1):'';
-    h+=`<div class="rrow ${posClass}">
-      ${posNum}
-      <div class="av" style="width:36px;height:36px;font-size:13px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
+    const num=hayRes?`<div class="rnum">${i+1}</div>`:'<div class="rnum" style="color:var(--gris-md)">—</div>';
+    const cls=hayRes&&i<3?'r'+(i+1):'';
+    return `<div class="rrow ${cls}">${num}
+      <div class="av" style="width:34px;height:34px;font-size:12px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
       <div style="flex:1">
-        <div style="font-size:14px;font-weight:700">${p.nombre}</div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px">
-          ${hayResultados?`<span class="badge b-oro">${p.total} pts</span><span class="badge b-verde">${p.pM} marc.</span><span class="badge b-azul">${p.pG} grupos</span>`:'<span class="badge b-gris">sin resultados aún</span>'}
-          ${p.bloqueado?'<span class="badge b-gris">✓ enviado</span>':'<span class="badge b-rojo">pendiente</span>'}
+        <div style="font-size:13px;font-weight:700">${p.nombre}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">
+          ${hayRes?cols(p):'<span class="badge b-gris">sin resultados aún</span>'}
+          ${p.bloqueado?'<span class="badge b-gris" title="Pronósticos enviados">✓</span>':''}
         </div>
       </div>
     </div>`;
-  });
+  }
+
+  let h=`<div class="gtabs" style="margin-bottom:0">
+    <button class="gtab active" id="rtab-g" onclick="switchRtab('g',this)">⚽ Fase de grupos</button>
+    <button class="gtab" id="rtab-e" onclick="switchRtab('e',this)">🔥 Eliminatorias</button>
+  </div>
+  <div id="rtab-g-body">`;
+  if(!rowsG.length) h+='<div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">El administrador debe añadir participantes.</div>';
+  else rowsG.forEach((p,i)=>{h+=filaRanking(p,i,hayResGrupos,p=>`<span class="badge b-oro">${p.pts} pts</span><span class="badge b-verde">${p.pM} marc.</span><span class="badge b-azul">${p.pG} grupos</span>`);});
+  h+=`</div><div id="rtab-e-body" style="display:none">`;
+  if(!DB.bracketAbierto&&!hayResElim) h+='<div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">La fase eliminatoria aún no ha comenzado.</div>';
+  else rowsE.forEach((p,i)=>{h+=filaRanking(p,i,hayResElim,p=>`<span class="badge b-oro">${p.pts} pts</span><span class="badge b-verde">${p.pM} marc.</span><span class="badge b-ambar">${p.pA} avance</span>`);});
+  h+=`</div>`;
   document.getElementById('ranking-lista').innerHTML=h;
   const infoEl=document.getElementById('estado-backend');
-  if(infoEl){
-    infoEl.innerHTML=hayResultados
-      ?''
-      :'<div class="alert a-info" style="font-size:12px">Los puntos y el orden se mostrarán cuando el administrador ingrese los primeros resultados reales.</div>';
-  }
+  if(infoEl) infoEl.innerHTML=hayResGrupos?'':'<div class="alert a-info" style="font-size:12px">Los puntos se mostrarán cuando el administrador ingrese los primeros resultados reales.</div>';
+}
+function switchRtab(tab,btn){
+  document.querySelectorAll('[id^="rtab-"]').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('rtab-g-body').style.display=tab==='g'?'':'none';
+  document.getElementById('rtab-e-body').style.display=tab==='e'?'':'none';
 }
 
 // ── PRONÓSTICOS ──
@@ -670,8 +706,11 @@ function renderAdmin(){
     h+='<button class="gtab '+(i===0?'active':'')+'" id="atab-'+g+'" onclick="adminG(\''+g+'\',this)">'+g+badge+'</button>';
   });
   h+=`</div><div id="admin-rbody"></div></div>`;
+  h+=renderAdminElim();
   document.getElementById('admin-panel').innerHTML=h;
-  renderAPLista(); adminG('A',null);
+  renderAPLista();
+  adminG('A',null);
+  adminElimRonda('r16',null);
 }
 
 function renderAPLista(){
@@ -808,13 +847,241 @@ async function guardarRes(g){
 
 // Configuración eliminada — URL hardcodeada
 
+
+// ══════════════════════════════════════════════
+// FASE ELIMINATORIA
+// ══════════════════════════════════════════════
+const RONDAS=[
+  {id:'r16',  label:'16avos de final',  n:16, pA:5},
+  {id:'r8',   label:'Octavos de final', n:8,  pA:5},
+  {id:'r4',   label:'Cuartos de final', n:4,  pA:6},
+  {id:'r2',   label:'Semifinal',        n:2,  pA:7},
+  {id:'r3p',  label:'Tercer puesto',    n:1,  pA:0},
+  {id:'rfin', label:'Final',            n:1,  pA:8}
+];
+
+function calcPuntosElim(pronElim,resElim){
+  let pM=0,pA=0;
+  RONDAS.forEach(ronda=>{
+    for(let i=1;i<=ronda.n;i++){
+      const pid=ronda.id+'_'+i;
+      const pr=pronElim[pid]||{},re=resElim[pid]||{};
+      if(re.g1!==undefined&&re.g1!==''&&pr.g1!==undefined&&pr.g1!==''){
+        const pg1=+pr.g1,pg2=+pr.g2,rg1=+re.g1,rg2=+re.g2;
+        if(pg1===rg1&&pg2===rg2) pM+=5;
+        else if(signo(pg1,pg2)===signo(rg1,rg2)) pM+=2;
+      }
+      if(ronda.pA>0&&re.ganador&&pr.ganador&&pr.ganador===re.ganador) pA+=ronda.pA;
+    }
+  });
+  return{pM,pA,total:pM+pA};
+}
+
+function renderElim(){
+  const el=document.getElementById('elim-content');
+  if(!el) return;
+  const abierto=!!DB.bracketAbierto;
+  const equipos=DB.equiposElim||{};
+  const tieneEq=Object.keys(equipos).length>0;
+  if(!abierto||!tieneEq){
+    el.innerHTML=`<div class="card"><div class="ct">🔥 Fase eliminatoria</div>
+      <div class="alert a-info">${!tieneEq
+        ?'El administrador aún no ha configurado el bracket. Estará disponible cuando termine la fase de grupos.'
+        :'El administrador aún no ha abierto los pronósticos eliminatorios.'}</div></div>`;
+    return;
+  }
+  const p=DB.participantes.find(x=>x.id===UID);
+  const locked=!!p.bloqueadoElim;
+  const pron=DB.pronosticosElim?.[UID]||{};
+  let h=locked
+    ?'<div class="locked">🔒 Tu bracket eliminatorio está enviado y bloqueado.</div>'
+    :'<div class="alert a-warn">Llena tu bracket completo. Al enviar quedará <strong>bloqueado definitivamente</strong>.</div>';
+  h+=`<div class="gtabs" id="elim-tabs">`;
+  RONDAS.forEach((r,i)=>{
+    h+='<button class="gtab '+(i===0?'active':'')+'" id="etabu-'+r.id+'" onclick="elimTabU(\''+r.id+'\',this)">'+r.label.split(' ')[0]+'</button>';
+  });
+  h+=`</div><div id="elim-ronda-body"></div>`;
+  if(!locked) h+=`<div style="text-align:right;margin:8px 0 16px"><button class="btn btn-verde" onclick="pedirConfirmElim()">✓ Enviar bracket eliminatorio</button></div>`;
+  el.innerHTML=h;
+  elimTabU('r16',null);
+}
+
+function elimTabU(rid,btn){
+  document.querySelectorAll('[id^="etabu-"]').forEach(t=>t.classList.remove('active'));
+  const t=btn||document.getElementById('etabu-'+rid);if(t)t.classList.add('active');
+  const ronda=RONDAS.find(r=>r.id===rid);
+  const p=DB.participantes.find(x=>x.id===UID);
+  const locked=!!p.bloqueadoElim;
+  const pron=DB.pronosticosElim?.[UID]||{};
+  const resElim=DB.resultadosElim||{};
+  const equipos=DB.equiposElim||{};
+  let h='<div class="card">';
+  for(let i=1;i<=ronda.n;i++){
+    const pid=rid+'_'+i;
+    const eq=equipos[pid]||{};
+    const pr=pron[pid]||{};
+    const re=resElim[pid]||{};
+    const tieneReal=re.g1!==undefined&&re.g1!=='';
+    if(!eq.local){h+=`<div class="match-row" style="color:var(--gris);font-size:12px;justify-content:center">Partido ${i} — por definir</div>`;continue;}
+    let rowStyle='';
+    if(tieneReal&&pr.g1!==undefined&&pr.g1!==''){
+      const pg1=+pr.g1,pg2=+pr.g2,rg1=+re.g1,rg2=+re.g2;
+      rowStyle=pg1===rg1&&pg2===rg2?'background:rgba(45,106,79,.08)':signo(pg1,pg2)===signo(rg1,rg2)?'background:rgba(29,53,87,.06)':'background:rgba(192,57,43,.06)';
+    }
+    h+=`<div style="padding:8px 0;border-bottom:1px solid var(--gris-cl);${rowStyle}">
+      <div class="match-row" style="margin-bottom:6px">
+        <span class="eq r">${eq.local}</span>`;
+    if(locked||tieneReal){
+      h+=`<span class="sval">${pr.g1??'—'}</span><span class="sdash">—</span><span class="sval">${pr.g2??'—'}</span>`;
+    } else {
+      h+=`<input class="sinp" type="number" min="0" max="20" value="${pr.g1??''}" oninput="spElim('${pid}','g1',this.value,'${eq.local}','${eq.vis}')">
+         <span class="sdash">—</span>
+         <input class="sinp" type="number" min="0" max="20" value="${pr.g2??''}" oninput="spElim('${pid}','g2',this.value,'${eq.local}','${eq.vis}')">`;
+    }
+    h+=`<span class="eq">${eq.vis}</span>`;
+    if(tieneReal) h+=`<span class="badge b-azul" style="font-size:10px;flex-shrink:0">${re.g1}—${re.g2}</span>`;
+    h+=`</div><div style="display:flex;align-items:center;gap:6px;font-size:12px">
+      <span style="color:var(--gris);font-weight:600;flex-shrink:0">Pasa:</span>`;
+    if(locked||tieneReal){
+      const acierto=tieneReal&&pr.ganador===re.ganador;
+      const fallo=tieneReal&&pr.ganador&&pr.ganador!==re.ganador;
+      h+=`<span class="badge ${acierto?'b-verde':fallo?'b-rojo':'b-gris'}">${pr.ganador||'—'}</span>`;
+      if(tieneReal) h+=`<span class="badge b-azul" style="font-size:10px">Real: ${re.ganador}</span>`;
+    } else {
+      h+=`<button class="btn ${pr.ganador===eq.local?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px" onclick="sgElim('${pid}','${eq.local}','${rid}')">${eq.local}</button>
+         <button class="btn ${pr.ganador===eq.vis?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px" onclick="sgElim('${pid}','${eq.vis}','${rid}')">${eq.vis}</button>`;
+    }
+    h+=`</div></div>`;
+  }
+  h+=`</div>`;
+  document.getElementById('elim-ronda-body').innerHTML=h;
+}
+
+function spElim(pid,campo,val,local,vis){
+  if(!DB.pronosticosElim)DB.pronosticosElim={};
+  if(!DB.pronosticosElim[UID])DB.pronosticosElim[UID]={};
+  if(!DB.pronosticosElim[UID][pid])DB.pronosticosElim[UID][pid]={local,vis};
+  DB.pronosticosElim[UID][pid][campo]=val;
+}
+function sgElim(pid,ganador,rid){
+  const eq=(DB.equiposElim||{})[pid]||{};
+  if(!DB.pronosticosElim)DB.pronosticosElim={};
+  if(!DB.pronosticosElim[UID])DB.pronosticosElim[UID]={};
+  DB.pronosticosElim[UID][pid]={...(DB.pronosticosElim[UID][pid]||{}),ganador,local:eq.local,vis:eq.vis};
+  elimTabU(rid,null);
+}
+function pedirConfirmElim(){
+  const pron=DB.pronosticosElim?.[UID]||{};
+  const eq=DB.equiposElim||{};
+  const tot=Object.keys(eq).length;
+  const ok=Object.keys(eq).filter(pid=>{const pr=pron[pid]||{};return pr.ganador&&pr.g1!==undefined&&pr.g1!=='';}).length;
+  if(ok<tot&&!confirm('Has llenado '+ok+' de '+tot+' partidos. ¿Seguro que quieres enviar?'))return;
+  abrirModal('modal-confirm-elim');
+}
+async function confirmarEnvioElim(){
+  cerrarModal('modal-confirm-elim');
+  const p=DB.participantes.find(x=>x.id===UID);
+  if(p)p.bloqueadoElim=true;
+  const ok=await guardarDatos();
+  toast(ok?'✓ Bracket enviado y bloqueado':'⚠ Guardado localmente',ok?'verde':'ambar');
+  renderElim();
+}
+
+// ── ADMIN ELIMINATORIAS ──
+function renderAdminElim(){
+  const abierto=!!DB.bracketAbierto;
+  let h=`<div class="card">
+    <div class="ct">🔥 Fase eliminatoria</div>
+    <div class="flexi" style="margin-bottom:12px;gap:10px">
+      <div style="flex:1;font-size:13px">Pronósticos: <span class="badge ${abierto?'b-verde':'b-rojo'}">${abierto?'Abiertos':'Cerrados'}</span></div>
+      <button class="btn ${abierto?'btn-rojo':'btn-verde'}" onclick="toggleBracket()">${abierto?'Cerrar pronósticos':'Abrir pronósticos'}</button>
+    </div>
+    <div class="alert a-info" style="font-size:12px;margin-bottom:10px">Ingresa los equipos, el marcador (90 min) y quién avanzó (incluyendo penales).</div>
+    <div class="gtabs" id="etabs-admin">`;
+  RONDAS.forEach((r,i)=>{
+    const nRes=Object.keys(DB.resultadosElim||{}).filter(k=>k.startsWith(r.id+'_')&&(DB.resultadosElim[k].ganador)).length;
+    const badge=nRes>0?'<span style="font-size:9px;background:var(--verde-cl);color:var(--verde-dk);border-radius:99px;padding:0 3px;margin-left:2px">'+nRes+'</span>':'';
+    h+='<button class="gtab '+(i===0?'active':'')+'" id="etab-a-'+r.id+'" onclick="adminElimRonda(\''+r.id+'\',this)">'+r.label.split(' ')[0]+badge+'</button>';
+  });
+  h+=`</div><div id="admin-elim-body"></div></div>`;
+  return h;
+}
+
+async function toggleBracket(){
+  DB.bracketAbierto=!DB.bracketAbierto;
+  await guardarDatos();renderAdmin();
+  toast(DB.bracketAbierto?'✓ Pronósticos abiertos':'Pronósticos cerrados','verde');
+}
+
+function adminElimRonda(rid,btn){
+  document.querySelectorAll('[id^="etab-a-"]').forEach(t=>t.classList.remove('active'));
+  const t=btn||document.getElementById('etab-a-'+rid);if(t)t.classList.add('active');
+  const ronda=RONDAS.find(r=>r.id===rid);
+  const eq=DB.equiposElim||{};
+  const res=DB.resultadosElim||{};
+  let h='<div style="margin-top:8px">';
+  for(let i=1;i<=ronda.n;i++){
+    const pid=rid+'_'+i;
+    const e=eq[pid]||{};
+    const re=res[pid]||{};
+    h+=`<div class="card" style="margin-bottom:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--gris);margin-bottom:8px">Partido ${i}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><div class="lbl">Equipo local</div><input type="text" value="${e.local||''}" placeholder="Equipo local" onchange="setEqElim('${pid}','local',this.value)"></div>
+        <div><div class="lbl">Equipo visitante</div><input type="text" value="${e.vis||''}" placeholder="Equipo visitante" onchange="setEqElim('${pid}','vis',this.value)"></div>
+      </div>
+      <div class="lbl" style="margin-bottom:5px">Resultado 90 min</div>
+      <div class="match-row" style="margin-bottom:8px">
+        <span class="eq r">${e.local||'Local'}</span>
+        <input class="sinp" type="number" min="0" max="20" value="${re.g1??''}" onchange="setResElimA('${pid}','g1',this.value)">
+        <span class="sdash">—</span>
+        <input class="sinp" type="number" min="0" max="20" value="${re.g2??''}" onchange="setResElimA('${pid}','g2',this.value)">
+        <span class="eq">${e.vis||'Visitante'}</span>
+      </div>
+      <div class="lbl" style="margin-bottom:5px">¿Quién avanza? (incluye penales)</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn ${re.ganador===e.local&&e.local?'btn-verde':'btn-gris'}" style="font-size:12px;padding:5px 12px"
+          onclick="setGanadorElimA('${pid}','L','${rid}')">${e.local||'Local'} ${re.ganador===e.local&&e.local?'✓':''}</button>
+        <button class="btn ${re.ganador===e.vis&&e.vis?'btn-verde':'btn-gris'}" style="font-size:12px;padding:5px 12px"
+          onclick="setGanadorElimA('${pid}','V','${rid}')">${e.vis||'Visitante'} ${re.ganador===e.vis&&e.vis?'✓':''}</button>
+      </div>
+    </div>`;
+  }
+  h+=`<div style="text-align:right;margin-top:4px"><button class="btn btn-verde" onclick="guardarElimA('${rid}')">💾 Guardar ${ronda.label}</button></div></div>`;
+  document.getElementById('admin-elim-body').innerHTML=h;
+}
+
+function setEqElim(pid,campo,val){
+  if(!DB.equiposElim)DB.equiposElim={};
+  if(!DB.equiposElim[pid])DB.equiposElim[pid]={};
+  DB.equiposElim[pid][campo]=val.trim();
+}
+function setResElimA(pid,campo,val){
+  if(!DB.resultadosElim)DB.resultadosElim={};
+  if(!DB.resultadosElim[pid])DB.resultadosElim[pid]={};
+  DB.resultadosElim[pid][campo]=val;
+}
+function setGanadorElimA(pid,lv,rid){
+  const eq=(DB.equiposElim||{})[pid]||{};
+  const ganador=lv==='L'?eq.local:eq.vis;
+  if(!ganador)return;
+  if(!DB.resultadosElim)DB.resultadosElim={};
+  if(!DB.resultadosElim[pid])DB.resultadosElim[pid]={};
+  DB.resultadosElim[pid].ganador=ganador;
+  adminElimRonda(rid,null);
+}
+async function guardarElimA(rid){
+  const ok=await guardarDatos();renderRanking();
+  toast(ok?'✓ Guardado':'⚠ Error',ok?'verde':'rojo');
+}
+
 // ── NAVEGACIÓN ──
 function irA(page,btn){
   document.querySelectorAll('.pg').forEach(p=>p.style.display='none');
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   document.getElementById('pg-'+page).style.display='block';
   if(btn)btn.classList.add('active');
-  const r={ranking:renderRanking,pronosticos:renderPronosticos,vertodos:renderVerTodos,admin:renderAdmin};
+  const r={ranking:renderRanking,pronosticos:renderPronosticos,vertodos:renderVerTodos,elim:renderElim,admin:renderAdmin};
   if(r[page])r[page]();
 }
 
