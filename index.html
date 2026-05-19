@@ -851,6 +851,10 @@ async function guardarRes(g){
 // ══════════════════════════════════════════════
 // FASE ELIMINATORIA
 // ══════════════════════════════════════════════
+
+// ══════════════════════════════════════════════
+// FASE ELIMINATORIA — Fixture FIFA + propagación automática
+// ══════════════════════════════════════════════
 const RONDAS=[
   {id:'r16',  label:'16avos de final',  n:16, pA:5},
   {id:'r8',   label:'Octavos de final', n:8,  pA:5},
@@ -859,6 +863,100 @@ const RONDAS=[
   {id:'r3p',  label:'Tercer puesto',    n:1,  pA:0},
   {id:'rfin', label:'Final',            n:1,  pA:8}
 ];
+
+// Fixture FIFA: para cada partido destino, qué partidos origen lo alimentan
+// {destPid: {localSrc: pidOrigen, visSrc: pidOrigen}}
+const FIXTURE={
+  // 16avos → Octavos
+  'r8_1':  {localSrc:'r16_1', visSrc:'r16_2'},
+  'r8_2':  {localSrc:'r16_3', visSrc:'r16_4'},
+  'r8_3':  {localSrc:'r16_5', visSrc:'r16_6'},
+  'r8_4':  {localSrc:'r16_7', visSrc:'r16_8'},
+  'r8_5':  {localSrc:'r16_9', visSrc:'r16_10'},
+  'r8_6':  {localSrc:'r16_11',visSrc:'r16_12'},
+  'r8_7':  {localSrc:'r16_13',visSrc:'r16_14'},
+  'r8_8':  {localSrc:'r16_15',visSrc:'r16_16'},
+  // Octavos → Cuartos
+  'r4_1':  {localSrc:'r8_1', visSrc:'r8_2'},
+  'r4_2':  {localSrc:'r8_3', visSrc:'r8_4'},
+  'r4_3':  {localSrc:'r8_5', visSrc:'r8_6'},
+  'r4_4':  {localSrc:'r8_7', visSrc:'r8_8'},
+  // Cuartos → Semifinal
+  'r2_1':  {localSrc:'r4_1', visSrc:'r4_2'},
+  'r2_2':  {localSrc:'r4_3', visSrc:'r4_4'},
+  // Semifinal → Final y Tercer puesto
+  'rfin_1':{localSrc:'r2_1', visSrc:'r2_2'},
+  'r3p_1': {localSrc:'r2_1', visSrc:'r2_2', losers:true}
+};
+
+/**
+ * Obtiene el equipo ganador de un partido en un objeto de pronósticos/resultados.
+ * Si hay empate en 90 min, devuelve el ganador por penales (.penales).
+ */
+function getGanador(partidos, pid){
+  const p=partidos[pid]||{};
+  return p.ganador||null;
+}
+
+/**
+ * Propaga automáticamente los ganadores según el fixture FIFA.
+ * Actualiza DB.equiposElim (para admin/resultados) o pronElim (para participante).
+ * @param partidos - objeto con todos los partidos del bracket
+ * @param fuente   - 'equipos' (resultados reales) o 'pron' (pronóstico participante)
+ * @param uid      - uid del participante (solo para fuente='pron')
+ */
+function propagarFixture(fuente, uid){
+  if(fuente==='equipos'){
+    const res=DB.resultadosElim||{};
+    const eq=DB.equiposElim||{};
+    Object.entries(FIXTURE).forEach(([destPid,src])=>{
+      if(!DB.equiposElim) DB.equiposElim={};
+      if(!DB.equiposElim[destPid]) DB.equiposElim[destPid]={};
+      if(src.losers){
+        // Tercer puesto: los perdedores de semifinal
+        const p1=res['r2_1']||{}, p2=res['r2_2']||{};
+        const eq1=DB.equiposElim['r2_1']||{}, eq2=DB.equiposElim['r2_2']||{};
+        if(p1.ganador) DB.equiposElim[destPid].local = p1.ganador===eq1.local?eq1.vis:eq1.local;
+        if(p2.ganador) DB.equiposElim[destPid].vis   = p2.ganador===eq2.local?eq2.vis:eq2.local;
+      } else {
+        const gLocal=getGanador(res, src.localSrc);
+        const gVis  =getGanador(res, src.visSrc);
+        if(gLocal) DB.equiposElim[destPid].local=gLocal;
+        if(gVis)   DB.equiposElim[destPid].vis=gVis;
+      }
+    });
+  } else {
+    // Pronóstico de participante
+    const pron=DB.pronosticosElim?.[uid]||{};
+    const eq=DB.equiposElim||{};
+    Object.entries(FIXTURE).forEach(([destPid,src])=>{
+      if(!DB.pronosticosElim)DB.pronosticosElim={};
+      if(!DB.pronosticosElim[uid])DB.pronosticosElim[uid]={};
+      if(!DB.pronosticosElim[uid][destPid])DB.pronosticosElim[uid][destPid]={};
+      if(src.losers){
+        const p1=pron['r2_1']||{}, p2=pron['r2_2']||{};
+        const eq1=eq['r2_1']||pron['r2_1']||{};
+        const eq2=eq['r2_2']||pron['r2_2']||{};
+        if(p1.ganador){
+          const localEq=eq1.local||p1.local;
+          DB.pronosticosElim[uid][destPid].local=p1.ganador===localEq?eq1.vis||p1.vis:localEq;
+        }
+        if(p2.ganador){
+          const localEq=eq2.local||p2.local;
+          DB.pronosticosElim[uid][destPid].vis=p2.ganador===localEq?eq2.vis||p2.vis:localEq;
+        }
+      } else {
+        const gLocal=getGanador(pron, src.localSrc);
+        const gVis  =getGanador(pron, src.visSrc);
+        // Solo propagar si el equipo origen es conocido en el bracket del admin
+        const eqSrcLocal=(DB.equiposElim||{})[src.localSrc]||{};
+        const eqSrcVis  =(DB.equiposElim||{})[src.visSrc]||{};
+        if(gLocal) DB.pronosticosElim[uid][destPid].local=gLocal;
+        if(gVis)   DB.pronosticosElim[uid][destPid].vis=gVis;
+      }
+    });
+  }
+}
 
 function calcPuntosElim(pronElim,resElim){
   let pM=0,pA=0;
@@ -882,16 +980,19 @@ function renderElim(){
   if(!el) return;
   const abierto=!!DB.bracketAbierto;
   const equipos=DB.equiposElim||{};
-  const tieneEq=Object.keys(equipos).length>0;
+  // Solo necesitamos que los 16avos estén configurados
+  const tieneEq=Object.keys(equipos).filter(k=>k.startsWith('r16_')).length>=1;
   if(!abierto||!tieneEq){
     el.innerHTML=`<div class="card"><div class="ct">🔥 Fase eliminatoria</div>
       <div class="alert a-info">${!tieneEq
-        ?'El administrador aún no ha configurado el bracket. Estará disponible cuando termine la fase de grupos.'
+        ?'El administrador aún no ha configurado el bracket de 16avos. Estará disponible cuando termine la fase de grupos.'
         :'El administrador aún no ha abierto los pronósticos eliminatorios.'}</div></div>`;
     return;
   }
   const p=DB.participantes.find(x=>x.id===UID);
   const locked=!!p.bloqueadoElim;
+  // Propagar fixture del participante antes de renderizar
+  if(!locked) propagarFixture('pron', UID);
   const pron=DB.pronosticosElim?.[UID]||{};
   let h=locked
     ?'<div class="locked">🔒 Tu bracket eliminatorio está enviado y bloqueado.</div>'
@@ -914,42 +1015,91 @@ function elimTabU(rid,btn){
   const locked=!!p.bloqueadoElim;
   const pron=DB.pronosticosElim?.[UID]||{};
   const resElim=DB.resultadosElim||{};
-  const equipos=DB.equiposElim||{};
+  const equiposAdmin=DB.equiposElim||{};
   let h='<div class="card">';
   for(let i=1;i<=ronda.n;i++){
     const pid=rid+'_'+i;
-    const eq=equipos[pid]||{};
-    const pr=pron[pid]||{};
+    // Para rondas > 16avos, los equipos vienen del fixture propagado del participante
+    const pronPid=pron[pid]||{};
+    const eqLocal = pronPid.local || equiposAdmin[pid]?.local || '';
+    const eqVis   = pronPid.vis   || equiposAdmin[pid]?.vis   || '';
     const re=resElim[pid]||{};
     const tieneReal=re.g1!==undefined&&re.g1!=='';
-    if(!eq.local){h+=`<div class="match-row" style="color:var(--gris);font-size:12px;justify-content:center">Partido ${i} — por definir</div>`;continue;}
+
+    if(!eqLocal&&!eqVis&&rid!=='r16'){
+      h+=`<div class="match-row" style="color:var(--gris);font-size:12px;justify-content:center;padding:8px 0">
+        Partido ${i} — depende de resultados anteriores</div>`;
+      continue;
+    }
+    if(rid==='r16'&&!equiposAdmin[pid]?.local){
+      h+=`<div class="match-row" style="color:var(--gris);font-size:12px;justify-content:center;padding:8px 0">
+        Partido ${i} — por definir</div>`;
+      continue;
+    }
+
     let rowStyle='';
-    if(tieneReal&&pr.g1!==undefined&&pr.g1!==''){
-      const pg1=+pr.g1,pg2=+pr.g2,rg1=+re.g1,rg2=+re.g2;
+    if(tieneReal&&pronPid.g1!==undefined&&pronPid.g1!==''){
+      const pg1=+pronPid.g1,pg2=+pronPid.g2,rg1=+re.g1,rg2=+re.g2;
       rowStyle=pg1===rg1&&pg2===rg2?'background:rgba(45,106,79,.08)':signo(pg1,pg2)===signo(rg1,rg2)?'background:rgba(29,53,87,.06)':'background:rgba(192,57,43,.06)';
     }
+
+    // Detectar empate en pronóstico para mostrar botón penales
+    const g1v=pronPid.g1!==undefined&&pronPid.g1!==''?+pronPid.g1:null;
+    const g2v=pronPid.g2!==undefined&&pronPid.g2!==''?+pronPid.g2:null;
+    const hayEmpate=g1v!==null&&g2v!==null&&g1v===g2v;
+
     h+=`<div style="padding:8px 0;border-bottom:1px solid var(--gris-cl);${rowStyle}">
+      <div style="font-size:10px;color:var(--gris);margin-bottom:3px">Partido ${i}</div>
       <div class="match-row" style="margin-bottom:6px">
-        <span class="eq r">${eq.local}</span>`;
+        <span class="eq r">${eqLocal}</span>`;
+
     if(locked||tieneReal){
-      h+=`<span class="sval">${pr.g1??'—'}</span><span class="sdash">—</span><span class="sval">${pr.g2??'—'}</span>`;
+      h+=`<span class="sval">${pronPid.g1??'—'}</span><span class="sdash">—</span><span class="sval">${pronPid.g2??'—'}</span>`;
     } else {
-      h+=`<input class="sinp" type="number" min="0" max="20" value="${pr.g1??''}" oninput="spElim('${pid}','g1',this.value,'${eq.local}','${eq.vis}')">
+      h+=`<input class="sinp" type="number" min="0" max="20" value="${pronPid.g1??''}"
+          oninput="spElim('${pid}','g1',this.value,'${eqLocal}','${eqVis}','${rid}')">
          <span class="sdash">—</span>
-         <input class="sinp" type="number" min="0" max="20" value="${pr.g2??''}" oninput="spElim('${pid}','g2',this.value,'${eq.local}','${eq.vis}')">`;
+         <input class="sinp" type="number" min="0" max="20" value="${pronPid.g2??''}"
+          oninput="spElim('${pid}','g2',this.value,'${eqLocal}','${eqVis}','${rid}')">`;
     }
-    h+=`<span class="eq">${eq.vis}</span>`;
+    h+=`<span class="eq">${eqVis}</span>`;
     if(tieneReal) h+=`<span class="badge b-azul" style="font-size:10px;flex-shrink:0">${re.g1}—${re.g2}</span>`;
-    h+=`</div><div style="display:flex;align-items:center;gap:6px;font-size:12px">
+    h+=`</div>`;
+
+    // Sección "¿Quién pasa?"
+    h+=`<div style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
       <span style="color:var(--gris);font-weight:600;flex-shrink:0">Pasa:</span>`;
+
     if(locked||tieneReal){
-      const acierto=tieneReal&&pr.ganador===re.ganador;
-      const fallo=tieneReal&&pr.ganador&&pr.ganador!==re.ganador;
-      h+=`<span class="badge ${acierto?'b-verde':fallo?'b-rojo':'b-gris'}">${pr.ganador||'—'}</span>`;
+      const acierto=tieneReal&&pronPid.ganador===re.ganador;
+      const fallo=tieneReal&&pronPid.ganador&&pronPid.ganador!==re.ganador;
+      h+=`<span class="badge ${acierto?'b-verde':fallo?'b-rojo':'b-gris'}">${pronPid.ganador||'—'}</span>`;
       if(tieneReal) h+=`<span class="badge b-azul" style="font-size:10px">Real: ${re.ganador}</span>`;
+    } else if(!eqLocal){
+      h+=`<span style="color:var(--gris);font-size:11px">Completa las rondas anteriores primero</span>`;
+    } else if(hayEmpate){
+      // Empate: mostrar botones de penales
+      h+=`<span style="color:var(--ambar);font-size:11px;font-weight:600">Empate → elige quién pasa por penales:</span>
+         <button class="btn ${pronPid.ganador===eqLocal?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
+           onclick="sgElim('${pid}','${eqLocal}','${rid}')">${eqLocal} 🥅</button>
+         <button class="btn ${pronPid.ganador===eqVis?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
+           onclick="sgElim('${pid}','${eqVis}','${rid}')">${eqVis} 🥅</button>`;
+    } else if(g1v!==null&&g2v!==null){
+      // Hay marcador sin empate: ganador automático
+      const autoGanador=g1v>g2v?eqLocal:eqVis;
+      if(!pronPid.ganador||pronPid.ganador!==autoGanador){
+        // Auto-asignar ganador
+        spElimGanador(pid, autoGanador, eqLocal, eqVis, rid);
+        h+=`<span class="badge b-verde">${autoGanador} ✓ (auto)</span>`;
+      } else {
+        h+=`<span class="badge b-verde">${pronPid.ganador} ✓</span>`;
+      }
     } else {
-      h+=`<button class="btn ${pr.ganador===eq.local?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px" onclick="sgElim('${pid}','${eq.local}','${rid}')">${eq.local}</button>
-         <button class="btn ${pr.ganador===eq.vis?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px" onclick="sgElim('${pid}','${eq.vis}','${rid}')">${eq.vis}</button>`;
+      // Sin marcador aún: mostrar botones manuales
+      h+=`<button class="btn ${pronPid.ganador===eqLocal?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
+           onclick="sgElim('${pid}','${eqLocal}','${rid}')">${eqLocal}</button>
+         <button class="btn ${pronPid.ganador===eqVis?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
+           onclick="sgElim('${pid}','${eqVis}','${rid}')">${eqVis}</button>`;
     }
     h+=`</div></div>`;
   }
@@ -957,27 +1107,70 @@ function elimTabU(rid,btn){
   document.getElementById('elim-ronda-body').innerHTML=h;
 }
 
-function spElim(pid,campo,val,local,vis){
+function spElimGanador(pid, ganador, local, vis, rid){
+  if(!DB.pronosticosElim)DB.pronosticosElim={};
+  if(!DB.pronosticosElim[UID])DB.pronosticosElim[UID]={};
+  DB.pronosticosElim[UID][pid]={...(DB.pronosticosElim[UID][pid]||{}),ganador,local,vis};
+  propagarFixture('pron',UID);
+}
+
+function spElim(pid,campo,val,local,vis,rid){
   if(!DB.pronosticosElim)DB.pronosticosElim={};
   if(!DB.pronosticosElim[UID])DB.pronosticosElim[UID]={};
   if(!DB.pronosticosElim[UID][pid])DB.pronosticosElim[UID][pid]={local,vis};
   DB.pronosticosElim[UID][pid][campo]=val;
-}
-function sgElim(pid,ganador,rid){
-  const eq=(DB.equiposElim||{})[pid]||{};
-  if(!DB.pronosticosElim)DB.pronosticosElim={};
-  if(!DB.pronosticosElim[UID])DB.pronosticosElim[UID]={};
-  DB.pronosticosElim[UID][pid]={...(DB.pronosticosElim[UID][pid]||{}),ganador,local:eq.local,vis:eq.vis};
+  DB.pronosticosElim[UID][pid].local=local;
+  DB.pronosticosElim[UID][pid].vis=vis;
+  // Si el marcador crea un ganador claro (sin empate), auto-asignarlo
+  const p=DB.pronosticosElim[UID][pid];
+  if(p.g1!==undefined&&p.g1!==''&&p.g2!==undefined&&p.g2!==''){
+    const g1=+p.g1,g2=+p.g2;
+    if(g1!==g2){
+      p.ganador=g1>g2?local:vis;
+      propagarFixture('pron',UID);
+    } else {
+      // Empate: limpiar ganador para forzar elección manual de penales
+      delete p.ganador;
+    }
+  }
+  // Re-render la ronda actual
   elimTabU(rid,null);
 }
+
+function sgElim(pid,ganador,rid){
+  const eq=(DB.equiposElim||{})[pid]||{};
+  const pron=(DB.pronosticosElim?.[UID]||{})[pid]||{};
+  const local=pron.local||eq.local||'';
+  const vis=pron.vis||eq.vis||'';
+  if(!DB.pronosticosElim)DB.pronosticosElim={};
+  if(!DB.pronosticosElim[UID])DB.pronosticosElim[UID]={};
+  DB.pronosticosElim[UID][pid]={...(DB.pronosticosElim[UID][pid]||{}),ganador,local,vis};
+  propagarFixture('pron',UID);
+  elimTabU(rid,null);
+}
+
 function pedirConfirmElim(){
   const pron=DB.pronosticosElim?.[UID]||{};
   const eq=DB.equiposElim||{};
-  const tot=Object.keys(eq).length;
-  const ok=Object.keys(eq).filter(pid=>{const pr=pron[pid]||{};return pr.ganador&&pr.g1!==undefined&&pr.g1!=='';}).length;
-  if(ok<tot&&!confirm('Has llenado '+ok+' de '+tot+' partidos. ¿Seguro que quieres enviar?'))return;
+  // Contar partidos que tienen equipos definidos
+  let tot=0,ok=0;
+  RONDAS.forEach(r=>{
+    for(let i=1;i<=r.n;i++){
+      const pid=r.id+'_'+i;
+      const eqPid=eq[pid]||{};
+      const pronPid=pron[pid]||{};
+      const local=pronPid.local||eqPid.local;
+      const vis=pronPid.vis||eqPid.vis;
+      if(local&&vis){
+        tot++;
+        if(pronPid.ganador&&pronPid.g1!==undefined&&pronPid.g1!=='') ok++;
+      }
+    }
+  });
+  if(ok<tot&&!confirm('Has completado '+ok+' de '+tot+' partidos con equipos definidos. ¿Seguro que quieres enviar?'))return;
   abrirModal('modal-confirm-elim');
 }
+
 async function confirmarEnvioElim(){
   cerrarModal('modal-confirm-elim');
   const p=DB.participantes.find(x=>x.id===UID);
@@ -996,10 +1189,12 @@ function renderAdminElim(){
       <div style="flex:1;font-size:13px">Pronósticos: <span class="badge ${abierto?'b-verde':'b-rojo'}">${abierto?'Abiertos':'Cerrados'}</span></div>
       <button class="btn ${abierto?'btn-rojo':'btn-verde'}" onclick="toggleBracket()">${abierto?'Cerrar pronósticos':'Abrir pronósticos'}</button>
     </div>
-    <div class="alert a-info" style="font-size:12px;margin-bottom:10px">Ingresa los equipos, el marcador (90 min) y quién avanzó (incluyendo penales).</div>
+    <div class="alert a-info" style="font-size:12px;margin-bottom:10px">
+      <strong>16avos:</strong> ingresa los 32 equipos. Las fases siguientes se propagan automáticamente desde los resultados reales.
+    </div>
     <div class="gtabs" id="etabs-admin">`;
   RONDAS.forEach((r,i)=>{
-    const nRes=Object.keys(DB.resultadosElim||{}).filter(k=>k.startsWith(r.id+'_')&&(DB.resultadosElim[k].ganador)).length;
+    const nRes=Object.keys(DB.resultadosElim||{}).filter(k=>k.startsWith(r.id+'_')&&DB.resultadosElim[k].ganador).length;
     const badge=nRes>0?'<span style="font-size:9px;background:var(--verde-cl);color:var(--verde-dk);border-radius:99px;padding:0 3px;margin-left:2px">'+nRes+'</span>':'';
     h+='<button class="gtab '+(i===0?'active':'')+'" id="etab-a-'+r.id+'" onclick="adminElimRonda(\''+r.id+'\',this)">'+r.label.split(' ')[0]+badge+'</button>';
   });
@@ -1017,28 +1212,55 @@ function adminElimRonda(rid,btn){
   document.querySelectorAll('[id^="etab-a-"]').forEach(t=>t.classList.remove('active'));
   const t=btn||document.getElementById('etab-a-'+rid);if(t)t.classList.add('active');
   const ronda=RONDAS.find(r=>r.id===rid);
+  // Propagar fixture para mostrar equipos actualizados
+  propagarFixture('equipos');
   const eq=DB.equiposElim||{};
   const res=DB.resultadosElim||{};
+  const soloEquipos=(rid!=='r16'); // En fases > 16avos, equipos vienen del fixture
   let h='<div style="margin-top:8px">';
   for(let i=1;i<=ronda.n;i++){
     const pid=rid+'_'+i;
     const e=eq[pid]||{};
     const re=res[pid]||{};
+    const src=FIXTURE[pid];
+    const localLabel=e.local||(src?'Ganador '+src.localSrc:'—');
+    const visLabel=e.vis||(src?'Ganador '+src.visSrc:'—');
+
     h+=`<div class="card" style="margin-bottom:8px">
-      <div style="font-size:12px;font-weight:700;color:var(--gris);margin-bottom:8px">Partido ${i}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <div><div class="lbl">Equipo local</div><input type="text" value="${e.local||''}" placeholder="Equipo local" onchange="setEqElim('${pid}','local',this.value)"></div>
-        <div><div class="lbl">Equipo visitante</div><input type="text" value="${e.vis||''}" placeholder="Equipo visitante" onchange="setEqElim('${pid}','vis',this.value)"></div>
-      </div>
-      <div class="lbl" style="margin-bottom:5px">Resultado 90 min</div>
+      <div style="font-size:12px;font-weight:700;color:var(--gris);margin-bottom:8px">Partido ${i}
+        ${src?'<span style="font-size:10px;font-weight:400;color:var(--gris)"> — '+localLabel+' vs '+visLabel+'</span>':''}
+      </div>`;
+
+    if(rid==='r16'){
+      // Admin ingresa equipos manualmente solo en 16avos
+      h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><div class="lbl">Equipo local</div>
+          <input type="text" value="${e.local||''}" placeholder="Equipo local"
+            onchange="setEqElim('${pid}','local',this.value)"></div>
+        <div><div class="lbl">Equipo visitante</div>
+          <input type="text" value="${e.vis||''}" placeholder="Equipo visitante"
+            onchange="setEqElim('${pid}','vis',this.value)"></div>
+      </div>`;
+    } else {
+      // Fases siguientes: equipos automáticos desde fixture
+      h+=`<div style="display:flex;gap:8px;margin-bottom:8px;font-size:13px;font-weight:500">
+        <span class="badge b-azul">${e.local||'Pendiente'}</span>
+        <span style="color:var(--gris)">vs</span>
+        <span class="badge b-azul">${e.vis||'Pendiente'}</span>
+      </div>`;
+    }
+
+    h+=`<div class="lbl" style="margin-bottom:5px">Resultado 90 min</div>
       <div class="match-row" style="margin-bottom:8px">
         <span class="eq r">${e.local||'Local'}</span>
-        <input class="sinp" type="number" min="0" max="20" value="${re.g1??''}" onchange="setResElimA('${pid}','g1',this.value)">
+        <input class="sinp" type="number" min="0" max="20" value="${re.g1??''}"
+          onchange="setResElimA('${pid}','g1',this.value,'${rid}')">
         <span class="sdash">—</span>
-        <input class="sinp" type="number" min="0" max="20" value="${re.g2??''}" onchange="setResElimA('${pid}','g2',this.value)">
+        <input class="sinp" type="number" min="0" max="20" value="${re.g2??''}"
+          onchange="setResElimA('${pid}','g2',this.value,'${rid}')">
         <span class="eq">${e.vis||'Visitante'}</span>
       </div>
-      <div class="lbl" style="margin-bottom:5px">¿Quién avanza? (incluye penales)</div>
+      <div class="lbl" style="margin-bottom:5px">¿Quién avanza? (incluye penales si hubo)</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn ${re.ganador===e.local&&e.local?'btn-verde':'btn-gris'}" style="font-size:12px;padding:5px 12px"
           onclick="setGanadorElimA('${pid}','L','${rid}')">${e.local||'Local'} ${re.ganador===e.local&&e.local?'✓':''}</button>
@@ -1047,7 +1269,9 @@ function adminElimRonda(rid,btn){
       </div>
     </div>`;
   }
-  h+=`<div style="text-align:right;margin-top:4px"><button class="btn btn-verde" onclick="guardarElimA('${rid}')">💾 Guardar ${ronda.label}</button></div></div>`;
+  h+=`<div style="text-align:right;margin-top:4px">
+    <button class="btn btn-verde" onclick="guardarElimA('${rid}')">💾 Guardar ${ronda.label}</button>
+  </div></div>`;
   document.getElementById('admin-elim-body').innerHTML=h;
 }
 
@@ -1056,11 +1280,22 @@ function setEqElim(pid,campo,val){
   if(!DB.equiposElim[pid])DB.equiposElim[pid]={};
   DB.equiposElim[pid][campo]=val.trim();
 }
-function setResElimA(pid,campo,val){
+
+function setResElimA(pid,campo,val,rid){
   if(!DB.resultadosElim)DB.resultadosElim={};
   if(!DB.resultadosElim[pid])DB.resultadosElim[pid]={};
   DB.resultadosElim[pid][campo]=val;
+  // Auto-asignar ganador si marcador sin empate
+  const re=DB.resultadosElim[pid];
+  const eq=DB.equiposElim?.[pid]||{};
+  if(re.g1!==undefined&&re.g1!==''&&re.g2!==undefined&&re.g2!==''){
+    const g1=+re.g1,g2=+re.g2;
+    if(g1!==g2) re.ganador=g1>g2?eq.local:eq.vis;
+    // Si empate, no auto-asignar — admin debe elegir manualmente quién pasó
+  }
+  propagarFixture('equipos');
 }
+
 function setGanadorElimA(pid,lv,rid){
   const eq=(DB.equiposElim||{})[pid]||{};
   const ganador=lv==='L'?eq.local:eq.vis;
@@ -1068,12 +1303,17 @@ function setGanadorElimA(pid,lv,rid){
   if(!DB.resultadosElim)DB.resultadosElim={};
   if(!DB.resultadosElim[pid])DB.resultadosElim[pid]={};
   DB.resultadosElim[pid].ganador=ganador;
+  propagarFixture('equipos');
   adminElimRonda(rid,null);
 }
+
 async function guardarElimA(rid){
-  const ok=await guardarDatos();renderRanking();
-  toast(ok?'✓ Guardado':'⚠ Error',ok?'verde':'rojo');
+  propagarFixture('equipos');
+  const ok=await guardarDatos();
+  renderRanking();
+  toast(ok?'✓ Guardado y fixture actualizado':'⚠ Error',ok?'verde':'rojo');
 }
+
 
 // ── NAVEGACIÓN ──
 function irA(page,btn){
