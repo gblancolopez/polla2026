@@ -1067,7 +1067,7 @@ function elimTabU(rid,btn){
     h+=`</div>`;
 
     // Sección "¿Quién pasa?"
-    h+=`<div style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
+    h+=`<div id="pasa-${pid}" style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
       <span style="color:var(--gris);font-weight:600;flex-shrink:0">Pasa:</span>`;
 
     if(locked||tieneReal){
@@ -1121,7 +1121,6 @@ function spElim(pid,campo,val,local,vis,rid){
   DB.pronosticosElim[UID][pid][campo]=val;
   DB.pronosticosElim[UID][pid].local=local;
   DB.pronosticosElim[UID][pid].vis=vis;
-  // Si el marcador crea un ganador claro (sin empate), auto-asignarlo
   const p=DB.pronosticosElim[UID][pid];
   if(p.g1!==undefined&&p.g1!==''&&p.g2!==undefined&&p.g2!==''){
     const g1=+p.g1,g2=+p.g2;
@@ -1129,12 +1128,42 @@ function spElim(pid,campo,val,local,vis,rid){
       p.ganador=g1>g2?local:vis;
       propagarFixture('pron',UID);
     } else {
-      // Empate: limpiar ganador para forzar elección manual de penales
       delete p.ganador;
     }
   }
-  // Re-render la ronda actual
-  elimTabU(rid,null);
+  // Update only the "Pasa:" section of this specific partido — no full re-render
+  actualizarPasaElim(pid,local,vis,rid);
+}
+
+// Actualiza solo el div "Pasa:" de un partido sin re-renderizar toda la lista
+function actualizarPasaElim(pid,local,vis,rid){
+  const pasaEl=document.getElementById('pasa-'+pid);
+  if(!pasaEl){
+    // Fallback: re-render solo si el elemento no existe
+    elimTabU(rid,null);
+    return;
+  }
+  const pron=(DB.pronosticosElim?.[UID]||{})[pid]||{};
+  const g1v=pron.g1!==undefined&&pron.g1!==''?+pron.g1:null;
+  const g2v=pron.g2!==undefined&&pron.g2!==''?+pron.g2:null;
+  const hayEmpate=g1v!==null&&g2v!==null&&g1v===g2v;
+  let h='';
+  if(hayEmpate){
+    h=`<span style="color:var(--ambar);font-size:11px;font-weight:600">Empate → elige quién pasa por penales:</span>
+       <button class="btn ${pron.ganador===local?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
+         onclick="sgElim('${pid}','${local}','${rid}')">${local} 🥅</button>
+       <button class="btn ${pron.ganador===vis?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
+         onclick="sgElim('${pid}','${vis}','${rid}')">${vis} 🥅</button>`;
+  } else if(g1v!==null&&g2v!==null){
+    const autoG=g1v>g2v?local:vis;
+    h=`<span class="badge b-verde">${autoG} ✓</span>`;
+  } else {
+    h=`<button class="btn ${pron.ganador===local?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
+         onclick="sgElim('${pid}','${local}','${rid}')">${local}</button>
+       <button class="btn ${pron.ganador===vis?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
+         onclick="sgElim('${pid}','${vis}','${rid}')">${vis}</button>`;
+  }
+  pasaEl.innerHTML=h;
 }
 
 function sgElim(pid,ganador,rid){
@@ -1212,12 +1241,22 @@ function adminElimRonda(rid,btn){
   document.querySelectorAll('[id^="etab-a-"]').forEach(t=>t.classList.remove('active'));
   const t=btn||document.getElementById('etab-a-'+rid);if(t)t.classList.add('active');
   const ronda=RONDAS.find(r=>r.id===rid);
-  // Propagar fixture para mostrar equipos actualizados
   propagarFixture('equipos');
   const eq=DB.equiposElim||{};
   const res=DB.resultadosElim||{};
-  const soloEquipos=(rid!=='r16'); // En fases > 16avos, equipos vienen del fixture
   let h='<div style="margin-top:8px">';
+
+  // En 16avos: botón de guardar equipos en la parte superior con aviso
+  if(rid==='r16'){
+    h+=`<div class="alert a-warn" style="margin-bottom:10px;font-size:12px">
+      Ingresa los 32 equipos y haz clic en <strong>💾 Guardar equipos 16avos</strong>.
+      Si corriges un equipo, vuelve a guardar — el cambio se refleja automáticamente para todos los participantes.
+    </div>
+    <div style="text-align:right;margin-bottom:10px">
+      <button class="btn btn-verde" onclick="guardarEquipos16()">💾 Guardar equipos 16avos</button>
+    </div>`;
+  }
+
   for(let i=1;i<=ronda.n;i++){
     const pid=rid+'_'+i;
     const e=eq[pid]||{};
@@ -1232,17 +1271,15 @@ function adminElimRonda(rid,btn){
       </div>`;
 
     if(rid==='r16'){
-      // Admin ingresa equipos manualmente solo en 16avos
       h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div><div class="lbl">Equipo local</div>
           <input type="text" value="${e.local||''}" placeholder="Equipo local"
-            onchange="setEqElim('${pid}','local',this.value)"></div>
+            oninput="setEqElim('${pid}','local',this.value)"></div>
         <div><div class="lbl">Equipo visitante</div>
           <input type="text" value="${e.vis||''}" placeholder="Equipo visitante"
-            onchange="setEqElim('${pid}','vis',this.value)"></div>
+            oninput="setEqElim('${pid}','vis',this.value)"></div>
       </div>`;
     } else {
-      // Fases siguientes: equipos automáticos desde fixture
       h+=`<div style="display:flex;gap:8px;margin-bottom:8px;font-size:13px;font-weight:500">
         <span class="badge b-azul">${e.local||'Pendiente'}</span>
         <span style="color:var(--gris)">vs</span>
@@ -1269,10 +1306,22 @@ function adminElimRonda(rid,btn){
       </div>
     </div>`;
   }
-  h+=`<div style="text-align:right;margin-top:4px">
-    <button class="btn btn-verde" onclick="guardarElimA('${rid}')">💾 Guardar ${ronda.label}</button>
-  </div></div>`;
+
+  // Botón guardar al final (solo resultados, no equipos de 16avos)
+  if(rid!=='r16'){
+    h+=`<div style="text-align:right;margin-top:4px">
+      <button class="btn btn-verde" onclick="guardarElimA('${rid}')">💾 Guardar ${ronda.label}</button>
+    </div>`;
+  }
+  h+=`</div>`;
   document.getElementById('admin-elim-body').innerHTML=h;
+}
+
+// Guardar solo equipos de 16avos (sin resultados) — con propagación
+async function guardarEquipos16(){
+  propagarFixture('equipos');
+  const ok=await guardarDatos();
+  toast(ok?'✓ Equipos guardados. Cambios visibles para todos los participantes.':'⚠ Error al guardar',ok?'verde':'rojo');
 }
 
 function setEqElim(pid,campo,val){
