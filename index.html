@@ -530,8 +530,8 @@ function mostrarGrupoPron(g,btn){
   const pG=DB.pronosticos[UID]?.[g]||{};
   const ps=genPs(g);
   const rG=DB.resultados[g]||{};
-  let h=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
-    <div><div class="lbl" style="margin-bottom:6px">Partidos — Grupo ${g}</div>`;
+  let h=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px">
+    <div style="flex:1;min-width:240px"><div class="lbl" style="margin-bottom:6px">Partidos — Grupo ${g}</div>`;
   ps.forEach(p=>{
     const key=pk(p.local,p.vis),pr=pG[key]||{},re=rG[key]||{};
     const tieneR=re.g1!==undefined&&re.g1!=='';
@@ -548,7 +548,7 @@ function mostrarGrupoPron(g,btn){
       ${tieneR?`<span class="badge b-gris" style="font-size:10px;margin-left:2px;flex-shrink:0">${re.g1}—${re.g2}</span>`:''}
     </div>`;
   });
-  h+=`</div><div>
+  h+=`</div><div style="flex:1;min-width:240px">
     <div class="lbl" style="margin-bottom:6px">Clasificación provisional</div>
     <div id="tv-${g}"></div>
   </div></div>`;
@@ -707,6 +707,15 @@ function renderAdmin(){
   });
   h+=`</div><div id="admin-rbody"></div></div>`;
   h+=renderAdminElim();
+  h+=`<div class="card" style="border:1.5px solid var(--rojo-cl)">
+    <div class="ct" style="color:var(--rojo)">⚠️ Resetear fase eliminatoria</div>
+    <p style="font-size:12px;color:var(--gris);margin-bottom:10px">
+      Borra <strong>únicamente</strong> los datos de eliminatorias (equipos, resultados y pronósticos del bracket).
+      Los datos de la fase de grupos <strong>no se tocan</strong>.
+    </p>
+    <button class="btn btn-rojo" onclick="resetearElim()">🗑️ Resetear eliminatorias</button>
+    <div id="reset-elim-msg" style="display:none;margin-top:8px"></div>
+  </div>`;
   document.getElementById('admin-panel').innerHTML=h;
   renderAPLista();
   adminG('A',null);
@@ -995,7 +1004,9 @@ function renderElim(){
   if(!locked) propagarFixture('pron', UID);
   const pron=DB.pronosticosElim?.[UID]||{};
   let h=locked
-    ?'<div class="locked">🔒 Tu bracket eliminatorio está enviado y bloqueado.</div>'
+    ?`<div class="locked">🔒 Tu bracket eliminatorio está enviado.
+        <button class="btn btn-gris" style="font-size:11px;padding:3px 10px;margin-left:8px" onclick="reabrirElim()">✏️ Modificar</button>
+      </div>`
     :'<div class="alert a-warn">Llena tu bracket completo. Al enviar quedará <strong>bloqueado definitivamente</strong>.</div>';
   h+=`<div class="gtabs" id="elim-tabs">`;
   RONDAS.forEach((r,i)=>{
@@ -1016,7 +1027,7 @@ function elimTabU(rid,btn){
   const pron=DB.pronosticosElim?.[UID]||{};
   const resElim=DB.resultadosElim||{};
   const equiposAdmin=DB.equiposElim||{};
-  let h='<div class="card">';
+  let h='<div class="card" style="overflow-x:hidden">';
   for(let i=1;i<=ronda.n;i++){
     const pid=rid+'_'+i;
     // Para rondas > 16avos, los equipos vienen del fixture propagado del participante
@@ -1050,8 +1061,8 @@ function elimTabU(rid,btn){
 
     h+=`<div style="padding:8px 0;border-bottom:1px solid var(--gris-cl);${rowStyle}">
       <div style="font-size:10px;color:var(--gris);margin-bottom:3px">Partido ${i}</div>
-      <div class="match-row" style="margin-bottom:6px">
-        <span class="eq r">${eqLocal}</span>`;
+      <div class="match-row" style="margin-bottom:6px;flex-wrap:nowrap">
+        <span class="eq r" style="min-width:0;flex:1">${eqLocal}</span>`;
 
     if(locked||tieneReal){
       h+=`<span class="sval">${pronPid.g1??'—'}</span><span class="sdash">—</span><span class="sval">${pronPid.g2??'—'}</span>`;
@@ -1062,7 +1073,7 @@ function elimTabU(rid,btn){
          <input class="sinp" type="number" min="0" max="20" value="${pronPid.g2??''}"
           oninput="spElim('${pid}','g2',this.value,'${eqLocal}','${eqVis}','${rid}')">`;
     }
-    h+=`<span class="eq">${eqVis}</span>`;
+    h+=`<span class="eq" style="min-width:0;flex:1">${eqVis}</span>`;
     if(tieneReal) h+=`<span class="badge b-azul" style="font-size:10px;flex-shrink:0">${re.g1}—${re.g2}</span>`;
     h+=`</div>`;
 
@@ -1207,6 +1218,16 @@ async function confirmarEnvioElim(){
   const ok=await guardarDatos();
   toast(ok?'✓ Bracket enviado y bloqueado':'⚠ Guardado localmente',ok?'verde':'ambar');
   renderElim();
+}
+
+function reabrirElim(){
+  // Opción A: desbloquea para editar conservando todos los pronósticos anteriores
+  const p=DB.participantes.find(x=>x.id===UID);
+  if(!p) return;
+  if(!confirm('¿Quieres modificar tu bracket eliminatorio? Se conservarán todos tus pronósticos anteriores y podrás editarlos antes de volver a enviar.')) return;
+  p.bloqueadoElim=false;
+  renderElim();
+  toast('✓ Bracket desbloqueado. Puedes modificar tus pronósticos.','verde');
 }
 
 // ── ADMIN ELIMINATORIAS ──
@@ -1361,6 +1382,29 @@ async function guardarElimA(rid){
   const ok=await guardarDatos();
   renderRanking();
   toast(ok?'✓ Guardado y fixture actualizado':'⚠ Error',ok?'verde':'rojo');
+}
+
+async function resetearElim(){
+  if(!confirm('⚠️ ¿Estás seguro?\n\nEsto borrará:\n• Los 32 equipos del bracket\n• Todos los resultados de eliminatorias\n• Todos los pronósticos eliminatorios de los participantes\n\nLos datos de la fase de grupos NO se modifican.')) return;
+  if(!confirm('Segunda confirmación: ¿confirmas que quieres resetear la fase eliminatoria?')) return;
+  // Resetear solo datos de eliminatorias
+  DB.equiposElim={};
+  DB.resultadosElim={};
+  DB.bracketAbierto=false;
+  // Resetear bloqueadoElim de cada participante
+  DB.participantes.forEach(p=>{ delete p.bloqueadoElim; });
+  // Resetear pronosticosElim de cada participante
+  DB.pronosticosElim={};
+  const ok=await guardarDatos();
+  renderAdmin();
+  renderRanking();
+  const msg=document.getElementById('reset-elim-msg');
+  if(msg){
+    msg.className='alert a-ok';
+    msg.textContent='✓ Fase eliminatoria reseteada. Datos de grupos intactos.';
+    msg.style.display='block';
+  }
+  toast(ok?'✓ Eliminatorias reseteadas':'⚠ Error guardando',ok?'verde':'rojo');
 }
 
 
