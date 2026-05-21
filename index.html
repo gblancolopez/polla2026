@@ -1294,10 +1294,10 @@ function adminElimRonda(rid,btn){
     if(rid==='r16'){
       h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div><div class="lbl">Equipo local</div>
-          <input type="text" value="${e.local||''}" placeholder="Equipo local"
+          <input type="text" id="eq16_${pid}_local" value="${e.local||''}" placeholder="Equipo local"
             oninput="setEqElim('${pid}','local',this.value)"></div>
         <div><div class="lbl">Equipo visitante</div>
-          <input type="text" value="${e.vis||''}" placeholder="Equipo visitante"
+          <input type="text" id="eq16_${pid}_vis" value="${e.vis||''}" placeholder="Equipo visitante"
             oninput="setEqElim('${pid}','vis',this.value)"></div>
       </div>`;
     } else {
@@ -1338,11 +1338,28 @@ function adminElimRonda(rid,btn){
   document.getElementById('admin-elim-body').innerHTML=h;
 }
 
-// Guardar solo equipos de 16avos (sin resultados) — con propagación
+// Guardar equipos de 16avos — lee los inputs del DOM por ID antes de persistir
 async function guardarEquipos16(){
+  if(!DB.equiposElim) DB.equiposElim={};
+  // Leer todos los inputs del DOM (captura valores aunque oninput no haya disparado)
+  for(let i=1;i<=16;i++){
+    const pid='r16_'+i;
+    const localEl=document.getElementById('eq16_'+pid+'_local');
+    const visEl=document.getElementById('eq16_'+pid+'_vis');
+    if(localEl||visEl){
+      if(!DB.equiposElim[pid]) DB.equiposElim[pid]={};
+      if(localEl && localEl.value.trim()) DB.equiposElim[pid].local=localEl.value.trim();
+      if(visEl   && visEl.value.trim())   DB.equiposElim[pid].vis  =visEl.value.trim();
+    }
+  }
   propagarFixture('equipos');
   const ok=await guardarDatos();
-  toast(ok?'✓ Equipos guardados. Cambios visibles para todos los participantes.':'⚠ Error al guardar',ok?'verde':'rojo');
+  if(ok){
+    adminElimRonda('r16',null); // re-renderizar con nombres actualizados
+    toast('✓ Equipos guardados y visibles para todos los participantes.','verde');
+  } else {
+    toast('⚠ Error al guardar. Intenta de nuevo.','rojo');
+  }
 }
 
 function setEqElim(pid,campo,val){
