@@ -807,7 +807,7 @@ function adminG(g,btn){
   document.querySelectorAll('[id^="atab-"]').forEach(t=>t.classList.remove('active'));
   const t=btn||document.getElementById('atab-'+g);if(t)t.classList.add('active');
   const ps=genPs(g),rG=DB.resultados[g]||{};
-  let h=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px"><div>
+  let h=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px"><div style="flex:1;min-width:240px">
     <div class="lbl" style="margin-bottom:6px">Resultados — Grupo ${g}</div>`;
   ps.forEach(p=>{
     const key=pk(p.local,p.vis),re=rG[key]||{};
@@ -821,7 +821,7 @@ function adminG(g,btn){
       <span class="eq" title="${p.vis}">${p.vis}</span>
     </div>`;
   });
-  h+=`</div><div>
+  h+=`</div><div style="flex:1;min-width:240px">
     <div class="lbl" style="margin-bottom:6px">Clasificación calculada</div>
     <div id="arv-${g}"></div>
   </div></div>
