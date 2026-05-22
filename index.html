@@ -370,7 +370,9 @@ function pk(a,b){return a+'|||'+b;}
 function genPs(g){const eq=GRUPOS[g],ps=[];for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)ps.push({local:eq[i],vis:eq[j]});return ps;}
 function signo(a,b){return a>b?'L':b>a?'V':'E';}
 
-function clasificar(partidos,g){
+function clasificar(partidos,g,ordenManual){
+  // ordenManual: array de nombres de equipo en el orden elegido por el usuario
+  // solo aplica a equipos que quedaron empatados técnicamente
   const eq=GRUPOS[g],s={};
   eq.forEach(e=>{s[e]={pts:0,gf:0,gc:0,dg:0,pj:0};});
   partidos.forEach(p=>{
@@ -380,7 +382,59 @@ function clasificar(partidos,g){
     s[p.vis].gf+=g2;s[p.vis].gc+=g1;s[p.vis].dg+=(g2-g1);s[p.vis].pj++;
     if(g1>g2)s[p.local].pts+=3;else if(g2>g1)s[p.vis].pts+=3;else{s[p.local].pts++;s[p.vis].pts++;}
   });
-  return eq.map(e=>({equipo:e,...s[e]})).sort((a,b)=>b.pts-a.pts||b.dg-a.dg||b.gf-a.gf||a.equipo.localeCompare(b.equipo));
+  const arr=eq.map(e=>({equipo:e,...s[e]}));
+
+  // Ordenar automáticamente primero
+  arr.sort((a,b)=>b.pts-a.pts||b.dg-a.dg||b.gf-a.gf||a.equipo.localeCompare(b.equipo));
+
+  // Detectar grupos de equipos con exactamente los mismos pts, dg y gf (empate técnico)
+  // y aplicar orden manual dentro de cada grupo si existe
+  if(ordenManual&&ordenManual.length>0){
+    // Agrupar por (pts, dg, gf)
+    let i=0;
+    while(i<arr.length){
+      let j=i+1;
+      while(j<arr.length&&
+            arr[j].pts===arr[i].pts&&
+            arr[j].dg===arr[i].dg&&
+            arr[j].gf===arr[i].gf) j++;
+      if(j-i>1){
+        // Hay empate técnico entre arr[i..j-1]
+        const empGroup=arr.slice(i,j).map(x=>x.equipo);
+        // Aplicar orden manual solo para equipos de este grupo que estén en ordenManual
+        const manualEnGrupo=ordenManual.filter(e=>empGroup.includes(e));
+        if(manualEnGrupo.length===empGroup.length){
+          // El orden manual cubre exactamente este grupo — aplicar
+          const byManual={};
+          manualEnGrupo.forEach((e,idx)=>{byManual[e]=idx;});
+          arr.slice(i,j).sort((a,b)=>
+            (byManual[a.equipo]??99)-(byManual[b.equipo]??99)
+          ).forEach((e,k)=>{arr[i+k]=e;});
+        }
+      }
+      i=j;
+    }
+  }
+  return arr;
+}
+
+/**
+ * Detecta si hay empates técnicos (mismo pts, dg, gf) en la clasificación
+ * @returns {Array} grupos de equipos empatados: [[eq1,eq2], ...] — vacío si no hay
+ */
+function detectarEmpatesTecnicos(clasif){
+  const grupos=[];
+  let i=0;
+  while(i<clasif.length){
+    let j=i+1;
+    while(j<clasif.length&&
+          clasif[j].pts===clasif[i].pts&&
+          clasif[j].dg===clasif[i].dg&&
+          clasif[j].gf===clasif[i].gf) j++;
+    if(j-i>1) grupos.push(clasif.slice(i,j).map(x=>x.equipo));
+    i=j;
+  }
+  return grupos;
 }
 
 function mejTerceros(cls){
@@ -403,9 +457,11 @@ function calcPuntos(pron,res){
       if(pg1===rg1&&pg2===rg2) pM+=5;
       else if(signo(pg1,pg2)===signo(rg1,rg2)) pM+=2;
     });
-    // clasificaciones
-    pc[g]=clasificar(ps.map(p=>{const k=pk(p.local,p.vis);const pr=pG_[k]||{};return{...p,g1:pr.g1??'',g2:pr.g2??''};}),g);
-    rc[g]=clasificar(ps.map(p=>{const k=pk(p.local,p.vis);const re=rG_[k]||{};return{...p,g1:re.g1??'',g2:re.g2??''};}),g);
+    // clasificaciones (con orden manual si existe)
+    const ordenP=pron['__orden__']?.[g]||[];
+    const ordenR=res['__orden__']?.[g]||[];
+    pc[g]=clasificar(ps.map(p=>{const k=pk(p.local,p.vis);const pr=pG_[k]||{};return{...p,g1:pr.g1??'',g2:pr.g2??''};}),g,ordenP);
+    rc[g]=clasificar(ps.map(p=>{const k=pk(p.local,p.vis);const re=rG_[k]||{};return{...p,g1:re.g1??'',g2:re.g2??''};}),g,ordenR);
     // FIX: puntos de grupo SOLO si hay resultados reales
     const hayR=ps.some(p=>{const re=(rG_[pk(p.local,p.vis)]||{});return re.g1!==undefined&&re.g1!=='';});
     if(!hayR) return;
@@ -571,22 +627,116 @@ function tviva(g){
     const st=DB.pronosticos[UID]?.[g]?.[key]||{};
     return{...p,g1:g1El?g1El.value:st.g1??'',g2:g2El?g2El.value:st.g2??''};
   });
-  renderTV('tv-'+g, clasificar(ps,g));
+  const ordenManual=DB.pronosticos[UID]?.['__orden__']?.[g]||[];
+  const clasif=clasificar(ps,g,ordenManual);
+  renderTV('tv-'+g, clasif, g, UID, false);
 }
 
-function renderTV(id,cl){
+function renderTV(id,cl,g,uid,esAdmin){
   const el=document.getElementById(id);if(!el)return;
   const pc=['p1','p2','p3',''];
-  let h=`<table class="tviva"><thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr></thead><tbody>`;
+  const empates=g?detectarEmpatesTecnicos(cl):[];
+  const hayEmpate=empates.length>0;
+  // Equipos que están en algún grupo de empate técnico
+  const enEmpate=new Set(empates.flat());
+
+  let h='';
+  if(hayEmpate){
+    h+=`<div style="background:var(--ambar-cl);color:var(--ambar);border-radius:var(--r-sm);padding:6px 8px;font-size:11px;font-weight:600;margin-bottom:6px">
+      ⚠️ Empate técnico — usa las flechas para definir el orden entre: ${empates.map(gr=>gr.join(' y ')).join(' · ')}
+    </div>`;
+  }
+
+  h+=`<table class="tviva"><thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th>${hayEmpate?'<th></th>':''}</tr></thead><tbody>`;
   cl.forEach((e,i)=>{
-    h+=`<tr><td class="${pc[i]}">${i+1}</td>
+    const estaEmpatado=enEmpate.has(e.equipo);
+    // Encontrar el grupo de empate de este equipo
+    const grupoEmp=empates.find(gr=>gr.includes(e.equipo));
+    const idxEnGrupo=grupoEmp?grupoEmp.indexOf(e.equipo):-1;
+    const puedeSubir=estaEmpatado&&grupoEmp&&i>0&&enEmpate.has(cl[i-1].equipo)&&grupoEmp.includes(cl[i-1].equipo);
+    const puedeBajar=estaEmpatado&&grupoEmp&&i<cl.length-1&&enEmpate.has(cl[i+1].equipo)&&grupoEmp.includes(cl[i+1].equipo);
+
+    h+=`<tr style="${estaEmpatado?'background:rgba(180,83,9,.06)':''}">
+      <td class="${pc[i]}">${i+1}</td>
       <td style="font-weight:600;font-size:11px;white-space:nowrap">${e.equipo}</td>
       <td class="tc">${e.pj}</td><td class="tc">${e.gf}</td><td class="tc">${e.gc}</td>
       <td class="tc ${e.dg>0?'dg-p':e.dg<0?'dg-n':''}">${e.dg>0?'+':''}${e.dg}</td>
-      <td class="tc" style="font-weight:700">${e.pts}</td></tr>`;
+      <td class="tc" style="font-weight:700">${e.pts}</td>`;
+    if(hayEmpate){
+      h+=`<td class="tc" style="white-space:nowrap">`;
+      if(estaEmpatado){
+        h+=`<button onclick="moverEqOrden('${g}','${uid}',${esAdmin},'${e.equipo}',-1,'${id}')"
+              style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:1px 3px;${!puedeSubir?'opacity:.2;cursor:default':''}"
+              ${!puedeSubir?'disabled':''}>↑</button>`;
+        h+=`<button onclick="moverEqOrden('${g}','${uid}',${esAdmin},'${e.equipo}',1,'${id}')"
+              style="border:none;background:transparent;cursor:pointer;font-size:13px;padding:1px 3px;${!puedeBajar?'opacity:.2;cursor:default':''}"
+              ${!puedeBajar?'disabled':''}>↓</button>`;
+      }
+      h+=`</td>`;
+    }
+    h+=`</tr>`;
   });
-  h+=`</tbody></table><div style="font-size:10px;margin-top:4px;color:var(--gris)"><span class="p1">1.º</span> <span class="p2">2.º</span> clasifican · <span class="p3">3.º</span> posible mejor tercero</div>`;
+  h+=`</tbody></table>`;
+  if(hayEmpate){
+    h+=`<div style="font-size:10px;margin-top:4px;color:var(--ambar);font-weight:600">↑↓ Orden guardado automáticamente al mover</div>`;
+  }
+  h+=`<div style="font-size:10px;margin-top:4px;color:var(--gris)"><span class="p1">1.º</span> <span class="p2">2.º</span> clasifican · <span class="p3">3.º</span> posible mejor tercero</div>`;
   el.innerHTML=h;
+}
+
+/**
+ * Mueve un equipo empatado hacia arriba o abajo en el orden manual.
+ * @param g       - grupo (ej: 'A')
+ * @param uid     - uid del participante o '__admin__'
+ * @param esAdmin - true si es el admin
+ * @param equipo  - nombre del equipo a mover
+ * @param dir     - -1 = subir, 1 = bajar
+ * @param tvId    - id del elemento de la tabla viva para re-renderizar
+ */
+function moverEqOrden(g, uid, esAdmin, equipo, dir, tvId){
+  // Obtener o construir el orden actual desde la clasificación actual
+  if(esAdmin){
+    if(!DB.resultados['__orden__']) DB.resultados['__orden__']={};
+    if(!DB.resultados['__orden__'][g]){
+      // Inicializar con el orden automático actual
+      const ps=genPs(g).map(p=>{
+        const key=pk(p.local,p.vis);
+        const st=(DB.resultados[g]||{})[key]||{};
+        return{...p,g1:st.g1??'',g2:st.g2??''};
+      });
+      const ordenActual=clasificar(ps,g,[]).map(x=>x.equipo);
+      DB.resultados['__orden__'][g]=ordenActual;
+    }
+    const orden=DB.resultados['__orden__'][g];
+    const idx=orden.indexOf(equipo);
+    if(idx===-1) return;
+    const newIdx=idx+dir;
+    if(newIdx<0||newIdx>=orden.length) return;
+    [orden[idx],orden[newIdx]]=[orden[newIdx],orden[idx]];
+    // Re-renderizar tabla del admin
+    tvivaA(g);
+  } else {
+    if(!DB.pronosticos[uid]) DB.pronosticos[uid]={};
+    if(!DB.pronosticos[uid]['__orden__']) DB.pronosticos[uid]['__orden__']={};
+    if(!DB.pronosticos[uid]['__orden__'][g]){
+      // Inicializar con el orden automático actual
+      const ps=genPs(g).map(p=>{
+        const key=pk(p.local,p.vis);
+        const st=DB.pronosticos[uid]?.[g]?.[key]||{};
+        return{...p,g1:st.g1??'',g2:st.g2??''};
+      });
+      const ordenActual=clasificar(ps,g,[]).map(x=>x.equipo);
+      DB.pronosticos[uid]['__orden__'][g]=ordenActual;
+    }
+    const orden=DB.pronosticos[uid]['__orden__'][g];
+    const idx=orden.indexOf(equipo);
+    if(idx===-1) return;
+    const newIdx=idx+dir;
+    if(newIdx<0||newIdx>=orden.length) return;
+    [orden[idx],orden[newIdx]]=[orden[newIdx],orden[idx]];
+    // Re-renderizar tabla del participante
+    tviva(g);
+  }
 }
 
 function pedirConfirm(){
@@ -846,10 +996,24 @@ function tvivaA(g){
     const st=(DB.resultados[g]||{})[key]||{};
     return{...p,g1:g1El?g1El.value:st.g1??'',g2:g2El?g2El.value:st.g2??''};
   });
-  renderTV('arv-'+g,clasificar(ps,g));
+  const ordenManual=DB.resultados['__orden__']?.[g]||[];
+  const clasif=clasificar(ps,g,ordenManual);
+  renderTV('arv-'+g, clasif, g, '__admin__', true);
 }
 
 async function guardarRes(g){
+  // Leer valores actuales del DOM antes de guardar
+  genPs(g).forEach(p=>{
+    const key=pk(p.local,p.vis);
+    const g1El=document.getElementById('ar_'+g+'_'+key+'_g1');
+    const g2El=document.getElementById('ar_'+g+'_'+key+'_g2');
+    if(g1El||g2El){
+      if(!DB.resultados[g])DB.resultados[g]={};
+      if(!DB.resultados[g][key])DB.resultados[g][key]={};
+      if(g1El&&g1El.value!=='')DB.resultados[g][key].g1=g1El.value;
+      if(g2El&&g2El.value!=='')DB.resultados[g][key].g2=g2El.value;
+    }
+  });
   const ok=await guardarDatos(); renderRanking();
   toast(ok?`✓ Resultados grupo ${g} guardados`:'⚠ Guardado localmente',ok?'verde':'ambar');
 }
