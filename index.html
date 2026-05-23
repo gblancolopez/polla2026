@@ -86,7 +86,8 @@ tr:last-child td{border-bottom:none}.tc{text-align:center}
 pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;font-size:10.5px;overflow-x:auto;line-height:1.6;margin:6px 0;white-space:pre}
 .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
 .dot-ok{background:var(--verde)}.dot-err{background:var(--rojo)}.dot-warn{background:#f59e0b}
-@media(max-width:480px){.grid4{grid-template-columns:repeat(2,1fr)}.eq{font-size:11px}}
+@media(max-width:480px){.grid4{grid-template-columns:repeat(2,1fr)}.eq{font-size:11px}.elim-label{display:none}}
+@media(min-width:481px){.elim-label{display:inline}}
 </style>
 </head>
 <body>
@@ -101,7 +102,7 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
   <button class="nb" id="nb-ranking" onclick="irA('ranking',this)">🏆 Clasificación</button>
   <button class="nb" id="nb-pronosticos" onclick="irA('pronosticos',this)">📝 Mis pronósticos</button>
   <button class="nb" id="nb-vertodos" onclick="irA('vertodos',this)">👥 Ver todos</button>
-  <button class="nb" id="nb-elim" style="display:none" onclick="irA('elim',this)">🔥 Eliminatorias</button>
+  <button class="nb" id="nb-elim" style="display:none" onclick="irA('elim',this)">🔥 <span class="elim-label">Eliminación Directa</span></button>
   <button class="nb" id="nb-admin" style="display:none" onclick="irA('admin',this)">⚙️ Admin</button>
 </nav>
 
@@ -138,7 +139,8 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
   <div class="grid4">
     <div class="scard"><div class="sv" style="color:#b45309">5</div><div class="sl">Marcador exacto</div></div>
     <div class="scard"><div class="sv" style="color:var(--azul2)">2</div><div class="sl">Ganador/empate</div></div>
-    <div class="scard"><div class="sv" style="color:var(--verde)">3/2</div><div class="sl">Posición grupo (1°-3°): exacta 3pts · en top-3 2pts</div></div>
+    <div class="scard"><div class="sv" style="color:var(--verde)">3</div><div class="sl">Posición exacta en el grupo (1°, 2° o 3°)</div></div>
+    <div class="scard"><div class="sv" style="color:var(--ambar)">2</div><div class="sl">En el top 3 del grupo pero posición incorrecta</div></div>
   </div>
   <div class="card">
     <div class="flexi" style="margin-bottom:12px">
@@ -515,7 +517,7 @@ function renderRanking(){
 
   let h=`<div class="gtabs" style="margin-bottom:0">
     <button class="gtab active" id="rtab-g" onclick="switchRtab('g',this)">⚽ Fase de grupos</button>
-    <button class="gtab" id="rtab-e" onclick="switchRtab('e',this)">🔥 Eliminatorias</button>
+    <button class="gtab" id="rtab-e" onclick="switchRtab('e',this)">🔥 Elim. Directa</button>
   </div>
   <div id="rtab-g-body">`;
   if(!rowsG.length) h+='<div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">El administrador debe añadir participantes.</div>';
@@ -1640,4 +1642,5 @@ init();
 </script>
 </body>
 </html>
+
 
