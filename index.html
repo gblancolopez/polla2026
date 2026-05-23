@@ -203,7 +203,7 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
     <div class="alert a-warn">Una vez enviado tu bracket eliminatorio queda <strong>bloqueado definitivamente</strong>.</div>
     <div class="flexi" style="gap:8px;margin-top:14px">
       <button class="btn btn-gris f1" onclick="cerrarModal('modal-confirm-elim')">Revisar más</button>
-      <button class="btn btn-verde f1" onclick="confirmarEnvioElim()">✓ Enviar bracket</button>
+      <button class="btn btn-verde f1" onclick="confirmarEnvioElim()">✓ Enviar Pronósticos Eliminatorias</button>
     </div>
   </div>
 </div>
@@ -462,9 +462,13 @@ function calcPuntos(pron,res){
     const ordenR=res['__orden__']?.[g]||[];
     pc[g]=clasificar(ps.map(p=>{const k=pk(p.local,p.vis);const pr=pG_[k]||{};return{...p,g1:pr.g1??'',g2:pr.g2??''};}),g,ordenP);
     rc[g]=clasificar(ps.map(p=>{const k=pk(p.local,p.vis);const re=rG_[k]||{};return{...p,g1:re.g1??'',g2:re.g2??''};}),g,ordenR);
-    // FIX: puntos de grupo SOLO si hay resultados reales
-    const hayR=ps.some(p=>{const re=(rG_[pk(p.local,p.vis)]||{});return re.g1!==undefined&&re.g1!=='';});
-    if(!hayR) return;
+    // FIX: puntos de grupo SOLO si el admin ha ingresado TODOS los marcadores del grupo
+    const totalPartidos=ps.length; // siempre 6 para un grupo de 4 equipos
+    const partidosConResultado=ps.filter(p=>{
+      const re=rG_[pk(p.local,p.vis)]||{};
+      return re.g1!==undefined&&re.g1!==''&&re.g2!==undefined&&re.g2!=='';
+    }).length;
+    if(partidosConResultado<totalPartidos) return;
     const t3P=pc[g].slice(0,3).map(x=>x.equipo);
     const t3R=rc[g].slice(0,3).map(x=>x.equipo);
     [0,1,2].forEach(i=>{
@@ -1177,7 +1181,6 @@ function renderElim(){
     h+='<button class="gtab '+(i===0?'active':'')+'" id="etabu-'+r.id+'" onclick="elimTabU(\''+r.id+'\',this)">'+r.label.split(' ')[0]+'</button>';
   });
   h+=`</div><div id="elim-ronda-body"></div>`;
-  if(!locked) h+=`<div style="text-align:right;margin:8px 0 16px"><button class="btn btn-verde" onclick="pedirConfirmElim()">✓ Enviar bracket eliminatorio</button></div>`;
   el.innerHTML=h;
   elimTabU('r16',null);
 }
@@ -1279,6 +1282,13 @@ function elimTabU(rid,btn){
     h+=`</div></div>`;
   }
   h+=`</div>`;
+  // Botón "Enviar" solo aparece en la pestaña Final y solo si no está bloqueado
+  const p2=DB.participantes.find(x=>x.id===UID);
+  if(!p2.bloqueadoElim && rid==='rfin'){
+    h+=`<div style="text-align:right;margin:12px 0 16px">
+      <button class="btn btn-verde" onclick="pedirConfirmElim()">✓ Enviar Pronósticos Eliminatorias</button>
+    </div>`;
+  }
   document.getElementById('elim-ronda-body').innerHTML=h;
 }
 
@@ -1630,3 +1640,4 @@ init();
 </script>
 </body>
 </html>
+
