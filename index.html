@@ -175,6 +175,13 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
 
 </main>
 
+<!-- Spinner global de guardado -->
+<div id="save-spinner" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--azul);color:#fff;padding:8px 20px;border-radius:99px;font-size:13px;font-weight:700;z-index:500;align-items:center;gap:8px;box-shadow:0 4px 12px rgba(0,0,0,.25)">
+  <span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></span>
+  Guardando...
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
 <!-- ══ MODAL: Identificación ══ -->
 <div class="modal-bg" id="modal-id">
   <div class="modal">
@@ -234,6 +241,7 @@ const AVC=[
 
 let DB={participantes:[],pronosticos:{},resultados:{},adminPass:'admin2026'};
 let UID=null, ADMIN=false;
+let VT_SELECCIONADOS=[]; // participantes seleccionados en Ver Todos (máx 4)
 
 // Hash simple djb2 — las contraseñas nunca se guardan en texto plano
 function hash(str){
@@ -279,14 +287,24 @@ async function cargarDatos(){
   }
 }
 
-async function guardarDatos(){
+async function guardarDatos(btnEl){
   localStorage.setItem('p26_db',JSON.stringify(DB));
+  // Mostrar indicador visual en el botón que disparó el guardado
+  let btnOrigText='', btnOrigDisabled=false;
+  const saveSpinner=document.getElementById('save-spinner');
+  if(saveSpinner) saveSpinner.style.display='flex';
+  if(btnEl){btnOrigText=btnEl.innerHTML;btnOrigDisabled=btnEl.disabled;btnEl.innerHTML='⏳ Guardando...';btnEl.disabled=true;}
   try{
     const r=await fetch(BURL,{method:'POST',redirect:'follow',
       headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'setData',data:DB})});
-    const j=await r.json(); return !!j.ok;
+    const j=await r.json();
+    return !!j.ok;
   }catch(e){return false;}
+  finally{
+    if(saveSpinner) saveSpinner.style.display='none';
+    if(btnEl){btnEl.innerHTML=btnOrigText;btnEl.disabled=btnOrigDisabled;}
+  }
 }
 
 // setEstado ya no se usa activamente — se mantiene por compatibilidad
@@ -781,8 +799,42 @@ function renderVerTodos(){
     });
     h+='</div>';el.innerHTML=h;return;
   }
-  let h=`<div class="alert a-ok">✓ Todos han enviado sus pronósticos.</div>
-    <div class="gtabs" id="vttabs">`;
+  // Asegurarse de que VT_SELECCIONADOS solo tenga participantes válidos
+  VT_SELECCIONADOS=VT_SELECCIONADOS.filter(id=>DB.participantes.find(p=>p.id===id));
+  if(VT_SELECCIONADOS.length===0){
+    // Seleccionar los primeros 4 por defecto
+    VT_SELECCIONADOS=DB.participantes.slice(0,4).map(p=>p.id);
+  }
+
+  let h=`<div class="alert a-ok">✓ Todos han enviado sus pronósticos.</div>`;
+
+  // Selector de participantes
+  h+=`<div class="card" style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+      <div style="font-size:13px;font-weight:700;color:var(--azul)">
+        Comparar participantes <span style="font-size:11px;font-weight:400;color:var(--gris)">(selecciona hasta 4)</span>
+      </div>
+      <div style="font-size:11px;color:var(--gris)">${VT_SELECCIONADOS.length} seleccionados de ${DB.participantes.length}</div>
+    </div>
+    <div style="max-height:120px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:6px;padding:6px;border:1.5px solid var(--gris-md);border-radius:var(--r-sm);background:var(--gris-cl)">`;
+  DB.participantes.forEach(p=>{
+    const sel=VT_SELECCIONADOS.includes(p.id);
+    const [bg,fg]=avc(p.id);
+    h+=`<button onclick="toggleVtSeleccion('${p.id}')" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;border:2px solid ${sel?'var(--azul)':'var(--gris-md)'};background:${sel?'var(--azul-cl)':'#fff'};cursor:pointer;font-size:12px;font-weight:${sel?'700':'400'};color:${sel?'var(--azul)':'var(--negro)'};transition:all .15s;white-space:nowrap;flex-shrink:0">
+      <div class="av" style="width:20px;height:20px;font-size:9px;background:${bg};color:${fg};flex-shrink:0">${inic(p.nombre)}</div>
+      ${abreviarNombre(p.nombre)}${sel?' ✓':''}
+    </button>`;
+  });
+  h+=`</div>
+    <div style="font-size:10px;color:var(--gris);margin-top:5px;text-align:center">↕ Desliza para ver todos los participantes</div>
+  </div>`;
+
+  // Botón PDF
+  h+=`<div style="text-align:right;margin-bottom:8px">
+    <button class="btn btn-azul" onclick="generarPDF()" style="font-size:12px">📄 Guardar / Imprimir PDF</button>
+  </div>`;
+
+  h+=`<div class="gtabs" id="vttabs">`;
   Object.keys(GRUPOS).forEach((g,i)=>{
     h+=`<button class="gtab ${i===0?'active':''}" id="vttab-${g}" onclick="vtG('${g}',this)">${g}</button>`;
   });
@@ -790,22 +842,63 @@ function renderVerTodos(){
   el.innerHTML=h; vtG('A',null);
 }
 
+// Abrevia un nombre completo: primer nombre + inicial segundo nombre (si hay) + apellido
+// Ej: "Juan Carlos Pérez García" → "Juan C. Pérez García"
+// Ej: "Juan Pérez" → "Juan Pérez"
+// Ej: "Juan Carlos Pérez" → "Juan C. Pérez"
+function abreviarNombre(nombre){
+  const partes=nombre.trim().split(/\s+/);
+  if(partes.length<=2) return nombre; // "Juan Pérez" → sin cambios
+  if(partes.length===3){
+    // "Juan Carlos Pérez" → "Juan C. Pérez"
+    return partes[0]+' '+partes[1][0]+'. '+partes[2];
+  }
+  // 4+ palabras: "Juan Carlos Pérez García" → "Juan C. Pérez García"
+  const resto=partes.slice(2).join(' ');
+  return partes[0]+' '+partes[1][0]+'. '+resto;
+}
+
+function toggleVtSeleccion(uid){
+  const idx=VT_SELECCIONADOS.indexOf(uid);
+  if(idx>=0){
+    VT_SELECCIONADOS.splice(idx,1);
+  } else {
+    if(VT_SELECCIONADOS.length>=4){
+      toast('Máximo 4 participantes para comparar','ambar');
+      return;
+    }
+    VT_SELECCIONADOS.push(uid);
+  }
+  // Re-renderizar selector y tabla
+  renderVerTodos();
+}
+
 function vtG(g,btn){
   document.querySelectorAll('[id^="vttab-"]').forEach(t=>t.classList.remove('active'));
   const t=btn||document.getElementById('vttab-'+g);if(t)t.classList.add('active');
   const ps=genPs(g),rG=DB.resultados[g]||{};
-  let h=`<div class="card" style="overflow-x:auto"><div class="ct">Grupo ${g}</div>
-    <table><thead><tr>
-      <th>Partido</th>
-      <th style="text-align:center;background:var(--azul-cl);color:#1e40af">Real</th>
-      ${DB.participantes.map(p=>`<th style="text-align:center;font-size:11px">${p.nombre.split(' ')[0]}</th>`).join('')}
+  // Usar solo los participantes seleccionados
+  const parts=DB.participantes.filter(p=>VT_SELECCIONADOS.includes(p.id));
+  if(parts.length===0){
+    document.getElementById('vt-gbody').innerHTML='<div class="alert a-warn">Selecciona al menos un participante arriba.</div>';
+    return;
+  }
+  let h=`<div class="card"><div class="ct">Grupo ${g}</div>
+    <div style="font-size:11px;color:var(--azul2);margin-bottom:8px;display:flex;align-items:center;gap:4px">
+      <span>←</span><span>Desliza para ver los pronósticos</span><span>→</span>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="min-width:300px"><thead><tr>
+      <th style="white-space:nowrap">Partido</th>
+      <th style="text-align:center;background:var(--azul-cl);color:#1e40af;white-space:nowrap;min-width:44px">Real</th>
+      ${parts.map(p=>`<th style="text-align:center;font-size:11px;white-space:nowrap">${abreviarNombre(p.nombre)}</th>`).join('')}
     </tr></thead><tbody>`;
   ps.forEach(p=>{
     const key=pk(p.local,p.vis),re=rG[key]||{};
     const tieneR=re.g1!==undefined&&re.g1!=='';
     h+=`<tr><td style="font-size:11px;white-space:nowrap">${p.local} — ${p.vis}</td>
-      <td class="tc" style="background:var(--azul-cl);font-weight:700">${tieneR?re.g1+' — '+re.g2:'<span class="badge b-gris">—</span>'}</td>`;
-    DB.participantes.forEach(part=>{
+      <td class="tc" style="background:var(--azul-cl);font-weight:700;white-space:nowrap">${tieneR?re.g1+'-'+re.g2:'<span class="badge b-gris">—</span>'}</td>`;
+    parts.forEach(part=>{
       const pr=(DB.pronosticos[part.id]?.[g]?.[key])||{};
       const tieneP=pr.g1!==undefined&&pr.g1!=='';
       let cls='b-gris';
@@ -815,11 +908,11 @@ function vtG(g,btn){
         else if(signo(pg1,pg2)===signo(rg1,rg2)) cls='b-azul';
         else cls='b-rojo';
       }
-      h+=`<td class="tc"><span class="badge ${cls}">${tieneP?pr.g1+' — '+pr.g2:'—'}</span></td>`;
+      h+=`<td class="tc"><span class="badge ${cls}">${tieneP?pr.g1+'-'+pr.g2:'—'}</span></td>`;
     });
     h+='</tr>';
   });
-  h+=`</tbody></table></div>`;
+  h+=`</tbody></table></div></div>`;
   document.getElementById('vt-gbody').innerHTML=h;
 }
 
@@ -982,7 +1075,7 @@ function adminG(g,btn){
     <div id="arv-${g}"></div>
   </div></div>
   <div style="margin-top:12px;text-align:right">
-    <button class="btn btn-verde" onclick="guardarRes('${g}')">💾 Guardar grupo ${g}</button>
+    <button class="btn btn-verde" onclick="guardarRes('${g}',this)">💾 Guardar grupo ${g}</button>
   </div>`;
   document.getElementById('admin-rbody').innerHTML=h;
   tvivaA(g);
@@ -1007,7 +1100,7 @@ function tvivaA(g){
   renderTV('arv-'+g, clasif, g, '__admin__', true);
 }
 
-async function guardarRes(g){
+async function guardarRes(g,btnEl){
   // Leer valores actuales del DOM antes de guardar
   genPs(g).forEach(p=>{
     const key=pk(p.local,p.vis);
@@ -1020,7 +1113,7 @@ async function guardarRes(g){
       if(g2El&&g2El.value!=='')DB.resultados[g][key].g2=g2El.value;
     }
   });
-  const ok=await guardarDatos(); renderRanking();
+  const ok=await guardarDatos(btnEl); renderRanking();
   toast(ok?`✓ Resultados grupo ${g} guardados`:'⚠ Guardado localmente',ok?'verde':'ambar');
 }
 
@@ -1170,6 +1263,8 @@ function renderElim(){
   }
   const p=DB.participantes.find(x=>x.id===UID);
   const locked=!!p.bloqueadoElim;
+  // Todos los participantes han enviado su bracket?
+  const todosEnviaron=DB.participantes.length>0&&DB.participantes.every(x=>x.bloqueadoElim);
   // Propagar fixture del participante antes de renderizar
   if(!locked) propagarFixture('pron', UID);
   const pron=DB.pronosticosElim?.[UID]||{};
@@ -1178,6 +1273,12 @@ function renderElim(){
         <button class="btn btn-gris" style="font-size:11px;padding:3px 10px;margin-left:8px" onclick="reabrirElim()">✏️ Modificar</button>
       </div>`
     :'<div class="alert a-warn">Llena tu bracket completo. Al enviar quedará <strong>bloqueado definitivamente</strong>.</div>';
+  // Botón PDF solo cuando todos han enviado
+  if(todosEnviaron){
+    h+=`<div style="text-align:right;margin-bottom:8px">
+      <button class="btn btn-azul" onclick="generarPDFElim()" style="font-size:12px">📄 PDF Eliminación Directa</button>
+    </div>`;
+  }
   h+=`<div class="gtabs" id="elim-tabs">`;
   RONDAS.forEach((r,i)=>{
     h+='<button class="gtab '+(i===0?'active':'')+'" id="etabu-'+r.id+'" onclick="elimTabU(\''+r.id+'\',this)">'+r.label.split(' ')[0]+'</button>';
@@ -1413,7 +1514,7 @@ function renderAdminElim(){
     <div class="ct">🔥 Fase eliminatoria</div>
     <div class="flexi" style="margin-bottom:12px;gap:10px">
       <div style="flex:1;font-size:13px">Pronósticos: <span class="badge ${abierto?'b-verde':'b-rojo'}">${abierto?'Abiertos':'Cerrados'}</span></div>
-      <button class="btn ${abierto?'btn-rojo':'btn-verde'}" onclick="toggleBracket()">${abierto?'Cerrar pronósticos':'Abrir pronósticos'}</button>
+      <button class="btn ${abierto?'btn-rojo':'btn-verde'}" onclick="toggleBracket(this)">${abierto?'Cerrar pronósticos':'Abrir pronósticos'}</button>
     </div>
     <div class="alert a-info" style="font-size:12px;margin-bottom:10px">
       <strong>16avos:</strong> ingresa los 32 equipos. Las fases siguientes se propagan automáticamente desde los resultados reales.
@@ -1428,9 +1529,9 @@ function renderAdminElim(){
   return h;
 }
 
-async function toggleBracket(){
+async function toggleBracket(btnEl){
   DB.bracketAbierto=!DB.bracketAbierto;
-  await guardarDatos();renderAdmin();
+  await guardarDatos(btnEl);renderAdmin();
   toast(DB.bracketAbierto?'✓ Pronósticos abiertos':'Pronósticos cerrados','verde');
 }
 
@@ -1450,7 +1551,7 @@ function adminElimRonda(rid,btn){
       Si corriges un equipo, vuelve a guardar — el cambio se refleja automáticamente para todos los participantes.
     </div>
     <div style="text-align:right;margin-bottom:10px">
-      <button class="btn btn-verde" onclick="guardarEquipos16()">💾 Guardar equipos 16avos</button>
+      <button class="btn btn-verde" onclick="guardarEquipos16(this)">💾 Guardar equipos 16avos</button>
     </div>`;
   }
 
@@ -1507,7 +1608,7 @@ function adminElimRonda(rid,btn){
   // Botón guardar al final (solo resultados, no equipos de 16avos)
   if(rid!=='r16'){
     h+=`<div style="text-align:right;margin-top:4px">
-      <button class="btn btn-verde" onclick="guardarElimA('${rid}')">💾 Guardar ${ronda.label}</button>
+      <button class="btn btn-verde" onclick="guardarElimA('${rid}',this)">💾 Guardar ${ronda.label}</button>
     </div>`;
   }
   h+=`</div>`;
@@ -1515,7 +1616,7 @@ function adminElimRonda(rid,btn){
 }
 
 // Guardar equipos de 16avos — lee los inputs del DOM por ID antes de persistir
-async function guardarEquipos16(){
+async function guardarEquipos16(btnEl){
   if(!DB.equiposElim) DB.equiposElim={};
   // Leer todos los inputs del DOM (captura valores aunque oninput no haya disparado)
   for(let i=1;i<=16;i++){
@@ -1529,7 +1630,7 @@ async function guardarEquipos16(){
     }
   }
   propagarFixture('equipos');
-  const ok=await guardarDatos();
+  const ok=await guardarDatos(btnEl);
   if(ok){
     adminElimRonda('r16',null); // re-renderizar con nombres actualizados
     toast('✓ Equipos guardados y visibles para todos los participantes.','verde');
@@ -1570,9 +1671,9 @@ function setGanadorElimA(pid,lv,rid){
   adminElimRonda(rid,null);
 }
 
-async function guardarElimA(rid){
+async function guardarElimA(rid,btnEl){
   propagarFixture('equipos');
-  const ok=await guardarDatos();
+  const ok=await guardarDatos(btnEl);
   renderRanking();
   toast(ok?'✓ Guardado y fixture actualizado':'⚠ Error',ok?'verde':'rojo');
 }
@@ -1600,6 +1701,225 @@ async function resetearElim(){
   toast(ok?'✓ Eliminatorias reseteadas':'⚠ Error guardando',ok?'verde':'rojo');
 }
 
+
+
+// ── GENERAR PDF ──
+function generarPDFElim(){
+  const todos=DB.participantes;
+  const BLOQUE=10;
+  const fecha=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'});
+  const equipos=DB.equiposElim||{};
+  const resElim=DB.resultadosElim||{};
+  const bloques=[];
+  for(let i=0;i<todos.length;i+=BLOQUE) bloques.push(todos.slice(i,i+BLOQUE));
+
+  // Helper: obtener equipo pronosticado para un participante en un partido
+  function getPronPart(uid,pid){
+    const pr=(DB.pronosticosElim?.[uid]||{})[pid]||{};
+    const eq=equipos[pid]||{};
+    return{
+      local: pr.local||eq.local||'',
+      vis:   pr.vis  ||eq.vis  ||'',
+      g1:    pr.g1??'',
+      g2:    pr.g2??'',
+      ganador: pr.ganador||''
+    };
+  }
+
+  let contenido='';
+
+  bloques.forEach((bloque,bi)=>{
+    const esUltimo=bi===bloques.length-1;
+
+    contenido+=`<div class="bloque-header">
+      <h2>Participantes ${bi*BLOQUE+1}–${bi*BLOQUE+bloque.length} de ${todos.length}
+        <span class="bloque-num">(Bloque ${bi+1} de ${bloques.length})</span>
+      </h2>
+      <div class="participantes-lista">
+        ${bloque.map((p,i)=>`<span class="part-chip"><span class="part-idx">${bi*BLOQUE+i+1}.</span> ${abreviarNombre(p.nombre)}</span>`).join('')}
+      </div>
+    </div>`;
+
+    RONDAS.forEach(ronda=>{
+      contenido+=`<div class="grupo-block">
+        <h3>${ronda.label}</h3>
+        <table><thead><tr>
+          <th class="partido-col">Partido</th>
+          ${bloque.map(p=>`<th colspan="2">${abreviarNombre(p.nombre)}</th>`).join('')}
+        </tr>
+        <tr>
+          <th></th>
+          ${bloque.map(()=>'<th class="sub-th">Marcador</th><th class="sub-th">Pasa</th>').join('')}
+        </tr></thead><tbody>`;
+
+      for(let i=1;i<=ronda.n;i++){
+        const pid=ronda.id+'_'+i;
+        const eq=equipos[pid]||{};
+        const tieneEq=eq.local&&eq.vis;
+
+        contenido+=`<tr>
+          <td class="partido-col">${tieneEq?eq.local+' — '+eq.vis:'Partido '+i}</td>`;
+
+        bloque.forEach(part=>{
+          const pr=getPronPart(part.id,pid);
+          const tieneP=pr.g1!==''&&pr.g2!=='';
+          contenido+=`<td style="color:#111;font-weight:600;text-align:center">${tieneP?pr.g1+'-'+pr.g2:'—'}</td>`;
+          contenido+=`<td style="color:#111;font-weight:600;text-align:center;font-size:7px;white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis">${pr.ganador||'—'}</td>`;
+        });
+        contenido+='</tr>';
+      }
+      contenido+=`</tbody></table></div>`;
+    });
+
+    if(!esUltimo) contenido+='<div class="salto-pagina"></div>';
+  });
+
+  const ventana=window.open('','_blank');
+  ventana.document.write(`<!DOCTYPE html><html lang="es"><head>
+    <meta charset="UTF-8">
+    <title>Polla Mundial 2026 — Eliminación Directa</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:8px;color:#111;background:#fff;padding:10px}
+      h1{font-size:14px;font-weight:700;color:#1d3557;margin-bottom:2px}
+      .subtitulo{font-size:9px;color:#6b7280;margin-bottom:12px}
+      .bloque-header{margin-bottom:6px}
+      .bloque-header h2{font-size:11px;font-weight:700;color:#1d3557;margin-bottom:5px}
+      .bloque-num{font-size:9px;font-weight:400;color:#6b7280}
+      .participantes-lista{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;padding:5px;background:#f3f4f6;border-radius:4px}
+      .part-chip{font-size:8px;font-weight:600;color:#1d3557;background:#dbeafe;padding:2px 6px;border-radius:99px}
+      .part-idx{color:#6b7280;font-weight:400}
+      .grupo-block{margin-bottom:6px;break-inside:avoid}
+      h3{font-size:9px;font-weight:700;color:#1d3557;background:#dbeafe;padding:3px 6px;border-radius:3px 3px 0 0}
+      table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb}
+      th{background:#f3f4f6;padding:2px 3px;text-align:center;font-size:7px;font-weight:700;color:#374151;border:1px solid #e5e7eb;white-space:nowrap}
+      td{padding:2px 3px;font-size:7px;border:1px solid #e5e7eb}
+      .partido-col{text-align:left!important;white-space:nowrap;min-width:80px}
+      .real-col{background:#dbeafe;font-weight:700;color:#1e40af;text-align:center}
+      .gan-col{background:#d8f3dc;font-weight:700;color:#1b4332;text-align:center;font-size:7px;white-space:nowrap;max-width:55px;overflow:hidden;text-overflow:ellipsis}
+      .sub-th{font-size:6px;font-weight:600;color:#6b7280}
+      tr:nth-child(even){background:#f9fafb}
+      .salto-pagina{break-after:page;height:0}
+      .leyenda{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;font-size:7px;padding-top:6px;border-top:1px solid #e5e7eb}
+      .leyenda-item{display:flex;align-items:center;gap:3px}
+      .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+      @media print{
+        body{padding:5px}
+        .no-print{display:none!important}
+        @page{margin:.6cm;size:landscape}
+      }
+    </style>
+  </head><body>
+    <h1>⚽ Polla Mundial FIFA 2026 — Pronósticos Eliminación Directa</h1>
+    <div class="subtitulo">Generado el ${fecha} · ${todos.length} participantes · bloques de hasta ${BLOQUE}</div>
+    ${contenido}
+    <div class="no-print" style="margin-top:12px;text-align:center">
+      <button onclick="window.print()" style="background:#1d3557;color:#fff;border:none;padding:9px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar como PDF</button>
+      <p style="margin-top:6px;font-size:11px;color:#6b7280">Elige "Guardar como PDF" y orientación "Horizontal"</p>
+    </div>
+  </body></html>`);
+  ventana.document.close();
+  setTimeout(()=>ventana.focus(),300);
+}
+
+function generarPDF(){
+  const todos=DB.participantes; // todos, no el filtro
+  const BLOQUE=10; // participantes por bloque/página
+  const fecha=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'});
+
+  // Dividir participantes en bloques de BLOQUE
+  const bloques=[];
+  for(let i=0;i<todos.length;i+=BLOQUE) bloques.push(todos.slice(i,i+BLOQUE));
+
+  let contenido='';
+
+  bloques.forEach((bloque,bi)=>{
+    const esUltimo=bi===bloques.length-1;
+    const nBloque=bi+1;
+    const totalBloques=bloques.length;
+
+    // Encabezado de bloque
+    contenido+=`<div class="bloque-header">
+      <h2>Participantes ${bi*BLOQUE+1}–${bi*BLOQUE+bloque.length} de ${todos.length}
+        <span class="bloque-num">(Bloque ${nBloque} de ${totalBloques})</span>
+      </h2>
+      <div class="participantes-lista">
+        ${bloque.map((p,i)=>`<span class="part-chip"><span class="part-idx">${bi*BLOQUE+i+1}.</span> ${abreviarNombre(p.nombre)}</span>`).join('')}
+      </div>
+    </div>`;
+
+    // Tabla de cada grupo para este bloque
+    Object.keys(GRUPOS).forEach(g=>{
+      const ps=genPs(g);
+      contenido+=`<div class="grupo-block">
+        <h3>Grupo ${g}</h3>
+        <table>
+          <thead><tr>
+            <th class="partido-col">Partido</th>
+            ${bloque.map(p=>`<th>${abreviarNombre(p.nombre)}</th>`).join('')}
+          </tr></thead><tbody>`;
+      ps.forEach(p=>{
+        const key=pk(p.local,p.vis);
+        contenido+=`<tr><td class="partido-col">${p.local} — ${p.vis}</td>`;
+        bloque.forEach(part=>{
+          const pr=(DB.pronosticos[part.id]?.[g]?.[key])||{};
+          const tieneP=pr.g1!==undefined&&pr.g1!=='';
+          contenido+=`<td style="color:#111;font-weight:600">${tieneP?pr.g1+'-'+pr.g2:'—'}</td>`;
+        });
+        contenido+='</tr>';
+      });
+      contenido+=`</tbody></table></div>`;
+    });
+
+    // Salto de página entre bloques (excepto el último)
+    if(!esUltimo) contenido+='<div class="salto-pagina"></div>';
+  });
+
+  const ventana=window.open('','_blank');
+  ventana.document.write(`<!DOCTYPE html><html lang="es"><head>
+    <meta charset="UTF-8">
+    <title>Polla Mundial 2026 — Pronósticos completos</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:9px;color:#111;background:#fff;padding:12px}
+      h1{font-size:15px;font-weight:700;color:#1d3557;margin-bottom:2px}
+      .subtitulo{font-size:10px;color:#6b7280;margin-bottom:14px}
+      .bloque-header{margin-bottom:8px}
+      .bloque-header h2{font-size:12px;font-weight:700;color:#1d3557;margin-bottom:6px}
+      .bloque-num{font-size:10px;font-weight:400;color:#6b7280}
+      .participantes-lista{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding:6px;background:#f3f4f6;border-radius:4px}
+      .part-chip{font-size:9px;font-weight:600;color:#1d3557;background:#dbeafe;padding:2px 7px;border-radius:99px}
+      .part-idx{color:#6b7280;font-weight:400}
+      .grupo-block{margin-bottom:8px;break-inside:avoid}
+      h3{font-size:10px;font-weight:700;color:#1d3557;background:#dbeafe;padding:3px 7px;border-radius:3px 3px 0 0;margin-bottom:0}
+      table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb}
+      th{background:#f3f4f6;padding:3px 4px;text-align:center;font-size:8px;font-weight:700;color:#374151;border:1px solid #e5e7eb;white-space:nowrap}
+      td{padding:2px 4px;text-align:center;font-size:8px;border:1px solid #e5e7eb}
+      .partido-col{text-align:left!important;white-space:nowrap;font-size:8px}
+      .real-col{background:#dbeafe;font-weight:700;color:#1e40af;white-space:nowrap}
+      tr:nth-child(even){background:#f9fafb}
+      .salto-pagina{break-after:page;height:0}
+      .leyenda{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;font-size:8px;padding-top:8px;border-top:1px solid #e5e7eb}
+      .leyenda-item{display:flex;align-items:center;gap:3px}
+      .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+      @media print{
+        body{padding:6px}
+        .no-print{display:none!important}
+        @page{margin:.7cm;size:landscape}
+      }
+    </style>
+  </head><body>
+    <h1>⚽ Polla Mundial FIFA 2026 — Pronósticos fase de grupos</h1>
+    <div class="subtitulo">Generado el ${fecha} · ${todos.length} participantes · ${bloques.length} bloque${bloques.length>1?'s':''} de hasta ${BLOQUE} participantes</div>
+    ${contenido}
+    <div class="no-print" style="margin-top:14px;text-align:center">
+      <button onclick="window.print()" style="background:#1d3557;color:#fff;border:none;padding:10px 24px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar como PDF</button>
+      <p style="margin-top:6px;font-size:11px;color:#6b7280">En el diálogo elige "Guardar como PDF" y orientación "Horizontal"</p>
+    </div>
+  </body></html>`);
+  ventana.document.close();
+  setTimeout(()=>ventana.focus(),300);
+}
 
 // ── NAVEGACIÓN ──
 function irA(page,btn){
@@ -1642,5 +1962,6 @@ init();
 </script>
 </body>
 </html>
+
 
 
