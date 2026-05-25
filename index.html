@@ -1132,7 +1132,6 @@ const RONDAS=[
   {id:'r8',   label:'Octavos de final', n:8,  pA:5},
   {id:'r4',   label:'Cuartos de final', n:4,  pA:6},
   {id:'r2',   label:'Semifinal',        n:2,  pA:7},
-  {id:'r3p',  label:'Tercer puesto',    n:1,  pA:0},
   {id:'rfin', label:'Final',            n:1,  pA:8}
 ];
 
@@ -1156,9 +1155,8 @@ const FIXTURE={
   // Cuartos → Semifinal
   'r2_1':  {localSrc:'r4_1', visSrc:'r4_2'},
   'r2_2':  {localSrc:'r4_3', visSrc:'r4_4'},
-  // Semifinal → Final y Tercer puesto
-  'rfin_1':{localSrc:'r2_1', visSrc:'r2_2'},
-  'r3p_1': {localSrc:'r2_1', visSrc:'r2_2', losers:true}
+  // Semifinal → Final
+  'rfin_1':{localSrc:'r2_1', visSrc:'r2_2'}
 };
 
 /**
@@ -1184,18 +1182,10 @@ function propagarFixture(fuente, uid){
     Object.entries(FIXTURE).forEach(([destPid,src])=>{
       if(!DB.equiposElim) DB.equiposElim={};
       if(!DB.equiposElim[destPid]) DB.equiposElim[destPid]={};
-      if(src.losers){
-        // Tercer puesto: los perdedores de semifinal
-        const p1=res['r2_1']||{}, p2=res['r2_2']||{};
-        const eq1=DB.equiposElim['r2_1']||{}, eq2=DB.equiposElim['r2_2']||{};
-        if(p1.ganador) DB.equiposElim[destPid].local = p1.ganador===eq1.local?eq1.vis:eq1.local;
-        if(p2.ganador) DB.equiposElim[destPid].vis   = p2.ganador===eq2.local?eq2.vis:eq2.local;
-      } else {
-        const gLocal=getGanador(res, src.localSrc);
+      const gLocal=getGanador(res, src.localSrc);
         const gVis  =getGanador(res, src.visSrc);
         if(gLocal) DB.equiposElim[destPid].local=gLocal;
         if(gVis)   DB.equiposElim[destPid].vis=gVis;
-      }
     });
   } else {
     // Pronóstico de participante
@@ -1205,42 +1195,34 @@ function propagarFixture(fuente, uid){
       if(!DB.pronosticosElim)DB.pronosticosElim={};
       if(!DB.pronosticosElim[uid])DB.pronosticosElim[uid]={};
       if(!DB.pronosticosElim[uid][destPid])DB.pronosticosElim[uid][destPid]={};
-      if(src.losers){
-        const p1=pron['r2_1']||{}, p2=pron['r2_2']||{};
-        const eq1=eq['r2_1']||pron['r2_1']||{};
-        const eq2=eq['r2_2']||pron['r2_2']||{};
-        if(p1.ganador){
-          const localEq=eq1.local||p1.local;
-          DB.pronosticosElim[uid][destPid].local=p1.ganador===localEq?eq1.vis||p1.vis:localEq;
-        }
-        if(p2.ganador){
-          const localEq=eq2.local||p2.local;
-          DB.pronosticosElim[uid][destPid].vis=p2.ganador===localEq?eq2.vis||p2.vis:localEq;
-        }
-      } else {
-        const gLocal=getGanador(pron, src.localSrc);
+      const gLocal=getGanador(pron, src.localSrc);
         const gVis  =getGanador(pron, src.visSrc);
-        // Solo propagar si el equipo origen es conocido en el bracket del admin
-        const eqSrcLocal=(DB.equiposElim||{})[src.localSrc]||{};
-        const eqSrcVis  =(DB.equiposElim||{})[src.visSrc]||{};
         if(gLocal) DB.pronosticosElim[uid][destPid].local=gLocal;
         if(gVis)   DB.pronosticosElim[uid][destPid].vis=gVis;
-      }
     });
   }
 }
 
 function calcPuntosElim(pronElim,resElim){
   let pM=0,pA=0;
+  const equipos=DB.equiposElim||{};
   RONDAS.forEach(ronda=>{
     for(let i=1;i<=ronda.n;i++){
       const pid=ronda.id+'_'+i;
       const pr=pronElim[pid]||{},re=resElim[pid]||{};
-      if(re.g1!==undefined&&re.g1!==''&&pr.g1!==undefined&&pr.g1!==''){
+      const eq=equipos[pid]||{};
+      // PUNTO 3: solo sumar marcador si los equipos del pronóstico coinciden con los reales
+      // En 16avos siempre coinciden (el admin los define y el participante los recibe)
+      // En rondas siguientes verificar coincidencia
+      const equiposCoinciden = ronda.id==='r16' ||
+        (pr.local&&pr.vis&&eq.local&&eq.vis&&
+         pr.local===eq.local&&pr.vis===eq.vis);
+      if(equiposCoinciden&&re.g1!==undefined&&re.g1!==''&&pr.g1!==undefined&&pr.g1!==''){
         const pg1=+pr.g1,pg2=+pr.g2,rg1=+re.g1,rg2=+re.g2;
         if(pg1===rg1&&pg2===rg2) pM+=5;
         else if(signo(pg1,pg2)===signo(rg1,rg2)) pM+=2;
       }
+      // Puntos de avance: siempre se cuentan si el ganador coincide
       if(ronda.pA>0&&re.ganador&&pr.ganador&&pr.ganador===re.ganador) pA+=ronda.pA;
     }
   });
@@ -1387,6 +1369,28 @@ function elimTabU(rid,btn){
   h+=`</div>`;
   // Botón "Enviar" solo aparece en la pestaña Final y solo si no está bloqueado
   const p2=DB.participantes.find(x=>x.id===UID);
+  // Campeón pronosticado (ganador de la Final)
+  if(rid==='rfin'){
+    const pronFin=(DB.pronosticosElim?.[UID]||{})['rfin_1']||{};
+    const resFin=(DB.resultadosElim||{})['rfin_1']||{};
+    const campPron=pronFin.ganador||'';
+    const campReal=resFin.ganador||'';
+    if(campPron||campReal){
+      let campStyle='background:linear-gradient(135deg,#1a1a00,#2a2200);border:2px solid #f4c430;';
+      let campAcierto='';
+      if(campPron&&campReal){
+        campAcierto=campPron===campReal
+          ?'<span class="badge b-verde" style="font-size:12px">✓ ¡Acertaste!</span>'
+          :'<span class="badge b-rojo" style="font-size:12px">✗ Fallaste</span>';
+      }
+      h+=`<div style="${campStyle}border-radius:12px;padding:16px 20px;margin-top:10px;text-align:center">
+        <div style="font-size:11px;font-weight:700;letter-spacing:3px;color:#f4c430;margin-bottom:8px">🏆 CAMPEÓN DEL MUNDO</div>
+        <div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:6px">${campPron||'—'}</div>
+        ${campReal?`<div style="font-size:11px;color:#aaa;margin-bottom:4px">Campeón real: <strong style="color:#f4c430">${campReal}</strong></div>`:''}
+        ${campAcierto}
+      </div>`;
+    }
+  }
   if(!p2.bloqueadoElim && rid==='rfin'){
     h+=`<div style="text-align:right;margin:12px 0 16px">
       <button class="btn btn-verde" onclick="pedirConfirmElim()">✓ Enviar Pronósticos Eliminatorias</button>
@@ -1610,6 +1614,21 @@ function adminElimRonda(rid,btn){
     h+=`<div style="text-align:right;margin-top:4px">
       <button class="btn btn-verde" onclick="guardarElimA('${rid}',this)">💾 Guardar ${ronda.label}</button>
     </div>`;
+  }
+  // Campeón real — mostrar debajo de la Final cuando hay ganador
+  if(rid==='rfin'){
+    const resFin=(DB.resultadosElim||{})['rfin_1']||{};
+    const campReal=resFin.ganador||'';
+    if(campReal){
+      h+=`<div style="background:linear-gradient(135deg,#1a1a00,#2a2200);border:2px solid #f4c430;border-radius:12px;padding:16px 20px;margin-top:14px;text-align:center">
+        <div style="font-size:11px;font-weight:700;letter-spacing:3px;color:#f4c430;margin-bottom:8px">🏆 CAMPEÓN DEL MUNDO</div>
+        <div style="font-size:28px;font-weight:900;color:#fff">${campReal}</div>
+      </div>`;
+    } else {
+      h+=`<div style="background:rgba(244,196,48,.07);border:1px dashed rgba(244,196,48,.3);border-radius:12px;padding:14px 20px;margin-top:14px;text-align:center;color:#888;font-size:13px">
+        🏆 El campeón aparecerá aquí cuando ingreses el resultado de la Final y selecciones el ganador.
+      </div>`;
+    }
   }
   h+=`</div>`;
   document.getElementById('admin-elim-body').innerHTML=h;
@@ -1962,6 +1981,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
