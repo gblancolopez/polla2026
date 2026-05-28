@@ -127,9 +127,6 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
       </div>
       <div id="gl-err" class="alert a-err" style="display:none;margin-bottom:8px"></div>
       <button class="btn btn-azul btn-full" onclick="loginGlobal()">Entrar</button>
-      <div style="font-size:11px;color:var(--gris);margin-top:10px;text-align:center">
-        El administrador ingresa con usuario <strong>admin</strong>
-      </div>
     </div>
   </div>
 </div>
@@ -243,11 +240,23 @@ let DB={participantes:[],pronosticos:{},resultados:{},adminPass:'admin2026'};
 let UID=null, ADMIN=false;
 let VT_SELECCIONADOS=[]; // participantes seleccionados en Ver Todos (máx 4)
 
-// Hash simple djb2 — las contraseñas nunca se guardan en texto plano
-function hash(str){
-  let h=5381;
-  for(let i=0;i<str.length;i++) h=((h<<5)+h)+str.charCodeAt(i);
-  return (h>>>0).toString(36);
+// ── SEGURIDAD ──
+// Escapa caracteres HTML para prevenir XSS cuando se inserta texto de usuarios en innerHTML
+function escHtml(str){
+  if(str===null||str===undefined) return '';
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+// SHA-256 vía Web Crypto API — contraseñas de participantes y admin
+async function hash(str){
+  const enc=new TextEncoder();
+  const buf=await crypto.subtle.digest('SHA-256',enc.encode(String(str)));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
 const BURL='https://script.google.com/macros/s/AKfycbzWqhQFkE4m73-WQ2cfxIOBPhb4GvPdyzco9U00csqbyQjYPZyZ0jZjXRctS9NKYVI/exec';
@@ -318,7 +327,7 @@ async function loginGlobal(){
   errEl.style.display='none';
   if(!email||!pass){errEl.textContent='Completa email y contraseña';errEl.style.display='block';return;}
 
-  // Admin: usuario "admin" con la contraseña adminPass
+  // Admin
   if(email==='admin'||email==='admin@polla2026'){
     if(pass===DB.adminPass){
       ADMIN=true; UID='__admin__';
@@ -331,11 +340,12 @@ async function loginGlobal(){
     return;
   }
 
-  // Usuario normal: email + passHash
+  // Usuario normal
   const p=DB.participantes.find(x=>x.email.toLowerCase()===email);
   if(!p){errEl.textContent='Email no encontrado. Verifica con el administrador.';errEl.style.display='block';return;}
   if(!p.passHash){errEl.textContent='Sin contraseña asignada. Contacta al administrador.';errEl.style.display='block';return;}
-  if(p.passHash!==hash(pass)){errEl.textContent='Contraseña incorrecta.';errEl.style.display='block';return;}
+  const h=await hash(pass);
+  if(p.passHash!==h){errEl.textContent='Contraseña incorrecta.';errEl.style.display='block';return;}
   ADMIN=false; UID=p.id;
   localStorage.setItem('p26_uid',UID);
   localStorage.removeItem('p26_admin');
@@ -369,13 +379,16 @@ function mostrarAppAdmin(){
   document.getElementById('pg-login').style.display='none';
   const nav=document.getElementById('main-nav');
   nav.style.display='flex';
+  // Admin ve: Clasificación, Ver todos, Eliminación Directa y Admin
+  // No ve: Mis pronósticos
   document.getElementById('nb-admin').style.display='';
+  document.getElementById('nb-ranking').style.display='';
+  document.getElementById('nb-vertodos').style.display='';
   document.getElementById('nb-elim') && (document.getElementById('nb-elim').style.display='none');
-  document.getElementById('nb-ranking').style.display='none';
   document.getElementById('nb-pronosticos').style.display='none';
-  document.getElementById('nb-vertodos').style.display='none';
   actualizarHeader();
-  irA('admin',document.getElementById('nb-admin'));
+  // Ir a Clasificación primero para que vea los botones PDF
+  irA('ranking',document.getElementById('nb-ranking'));
 }
 
 function cerrarSesion(){
@@ -387,7 +400,107 @@ function cerrarSesion(){
 
 // ── LÓGICA FIFA ──
 function pk(a,b){return a+'|||'+b;}
-function genPs(g){const eq=GRUPOS[g],ps=[];for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)ps.push({local:eq[i],vis:eq[j]});return ps;}
+// Orden oficial de partidos por grupo según fixture FIFA 2026
+const PARTIDOS_GRUPOS={
+  A:[
+    {local:'Mexico',            vis:'Sudáfrica'},
+    {local:'Corea del Sur',     vis:'República Checa'},
+    {local:'República Checa',   vis:'Sudáfrica'},
+    {local:'Mexico',            vis:'Corea del Sur'},
+    {local:'República Checa',   vis:'Mexico'},
+    {local:'Sudáfrica',         vis:'Corea del Sur'},
+  ],
+  B:[
+    {local:'Canadá',  vis:'Bosnia'},
+    {local:'Qatar',   vis:'Suiza'},
+    {local:'Suiza',   vis:'Bosnia'},
+    {local:'Canadá',  vis:'Qatar'},
+    {local:'Suiza',   vis:'Canadá'},
+    {local:'Bosnia',  vis:'Qatar'},
+  ],
+  C:[
+    {local:'Brasil',    vis:'Marruecos'},
+    {local:'Haití',     vis:'Escocia'},
+    {local:'Brasil',    vis:'Haití'},
+    {local:'Escocia',   vis:'Marruecos'},
+    {local:'Escocia',   vis:'Brasil'},
+    {local:'Marruecos', vis:'Haití'},
+  ],
+  D:[
+    {local:'USA',       vis:'Paraguay'},
+    {local:'Australia', vis:'Turquía'},
+    {local:'Turquía',   vis:'Paraguay'},
+    {local:'USA',       vis:'Australia'},
+    {local:'Turquía',   vis:'USA'},
+    {local:'Paraguay',  vis:'Australia'},
+  ],
+  E:[
+    {local:'Alemania',        vis:'Curazao'},
+    {local:'Costa de Marfil', vis:'Ecuador'},
+    {local:'Alemania',        vis:'Costa de Marfil'},
+    {local:'Curazao',         vis:'Ecuador'},
+    {local:'Ecuador',         vis:'Alemania'},
+    {local:'Curazao',         vis:'Costa de Marfil'},
+  ],
+  F:[
+    {local:'Países Bajos', vis:'Japón'},
+    {local:'Suecia',       vis:'Túnez'},
+    {local:'Países Bajos', vis:'Suecia'},
+    {local:'Túnez',        vis:'Japón'},
+    {local:'Túnez',        vis:'Países Bajos'},
+    {local:'Japón',        vis:'Suecia'},
+  ],
+  G:[
+    {local:'Bélgica',       vis:'Egipto'},
+    {local:'Irán',          vis:'Nueva Zelanda'},
+    {local:'Bélgica',       vis:'Irán'},
+    {local:'Nueva Zelanda', vis:'Egipto'},
+    {local:'Nueva Zelanda', vis:'Bélgica'},
+    {local:'Egipto',        vis:'Irán'},
+  ],
+  H:[
+    {local:'España',         vis:'Cabo Verde'},
+    {local:'Arabia Saudita', vis:'Uruguay'},
+    {local:'España',         vis:'Arabia Saudita'},
+    {local:'Uruguay',        vis:'Cabo Verde'},
+    {local:'Uruguay',        vis:'España'},
+    {local:'Cabo Verde',     vis:'Arabia Saudita'},
+  ],
+  I:[
+    {local:'Francia', vis:'Senegal'},
+    {local:'Irak',    vis:'Noruega'},
+    {local:'Francia', vis:'Irak'},
+    {local:'Noruega', vis:'Senegal'},
+    {local:'Noruega', vis:'Francia'},
+    {local:'Senegal', vis:'Irak'},
+  ],
+  J:[
+    {local:'Argentina', vis:'Argelia'},
+    {local:'Austria',   vis:'Jordania'},
+    {local:'Argentina', vis:'Austria'},
+    {local:'Jordania',  vis:'Argelia'},
+    {local:'Jordania',  vis:'Argentina'},
+    {local:'Argelia',   vis:'Austria'},
+  ],
+  K:[
+    {local:'Portugal',    vis:'RD Congo'},
+    {local:'Uzbekistán',  vis:'Colombia'},
+    {local:'Portugal',    vis:'Uzbekistán'},
+    {local:'Colombia',    vis:'RD Congo'},
+    {local:'Colombia',    vis:'Portugal'},
+    {local:'RD Congo',    vis:'Uzbekistán'},
+  ],
+  L:[
+    {local:'Inglaterra', vis:'Croacia'},
+    {local:'Ghana',      vis:'Panamá'},
+    {local:'Inglaterra', vis:'Ghana'},
+    {local:'Panamá',     vis:'Croacia'},
+    {local:'Panamá',     vis:'Inglaterra'},
+    {local:'Croacia',    vis:'Ghana'},
+  ],
+};
+
+function genPs(g){ return PARTIDOS_GRUPOS[g].map(p=>({local:p.local, vis:p.vis})); }
 function signo(a,b){return a>b?'L':b>a?'V':'E';}
 
 function clasificar(partidos,g,ordenManual){
@@ -524,7 +637,7 @@ function renderRanking(){
     return `<div class="rrow ${cls}">${num}
       <div class="av" style="width:34px;height:34px;font-size:12px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
       <div style="flex:1">
-        <div style="font-size:13px;font-weight:700">${p.nombre}</div>
+        <div style="font-size:13px;font-weight:700">${escHtml(p.nombre)}</div>
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">
           ${hayRes?cols(p):'<span class="badge b-gris">sin resultados aún</span>'}
           ${p.bloqueado?'<span class="badge b-gris" title="Pronósticos enviados">✓</span>':''}
@@ -533,9 +646,11 @@ function renderRanking(){
     </div>`;
   }
 
-  let h=`<div class="gtabs" style="margin-bottom:0">
+  let h=`<div class="gtabs" style="margin-bottom:0;align-items:center">
     <button class="gtab active" id="rtab-g" onclick="switchRtab('g',this)">⚽ Fase de grupos</button>
     <button class="gtab" id="rtab-e" onclick="switchRtab('e',this)">🔥 Elim. Directa</button>
+    ${ADMIN&&hayResGrupos?'<button class="btn btn-azul" style="font-size:11px;padding:4px 10px;margin-left:auto" onclick="generarPDFClasifGrupos()">📄 PDF Grupos</button>':''}
+    ${ADMIN&&(hayResElim||DB.bracketAbierto)?'<button class="btn btn-azul" style="font-size:11px;padding:4px 10px;margin-left:4px" onclick="generarPDFClasifElim()">📄 PDF Elim.</button>':''}
   </div>
   <div id="rtab-g-body">`;
   if(!rowsG.length) h+='<div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">El administrador debe añadir participantes.</div>';
@@ -570,7 +685,7 @@ function mostrarFormPron(p){
     :'<div class="alert a-warn">Al enviar, tus pronósticos quedan <strong>bloqueados definitivamente</strong>.</div>';
   h+=`<div class="card">
     <div class="flexi" style="margin-bottom:10px">
-      <span class="ct" style="margin:0">Pronósticos — ${p.nombre}</span>
+      <span class="ct" style="margin:0">Pronósticos — ${escHtml(p.nombre)}</span>
     </div>
     <div class="gtabs" id="ptabs">`;
   Object.keys(GRUPOS).forEach((g,i)=>{
@@ -793,7 +908,7 @@ function renderVerTodos(){
       const [bg,fg]=avc(p.id);
       h+=`<div class="rrow">
         <div class="av" style="width:32px;height:32px;font-size:12px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
-        <div style="flex:1"><div style="font-weight:700;font-size:13px">${p.nombre}</div></div>
+        <div style="flex:1"><div style="font-weight:700;font-size:13px">${escHtml(p.nombre)}</div></div>
         ${p.bloqueado?'<span class="badge b-verde">✓ Enviado</span>':'<span class="badge b-rojo">Pendiente</span>'}
       </div>`;
     });
@@ -822,17 +937,19 @@ function renderVerTodos(){
     const [bg,fg]=avc(p.id);
     h+=`<button onclick="toggleVtSeleccion('${p.id}')" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;border:2px solid ${sel?'var(--azul)':'var(--gris-md)'};background:${sel?'var(--azul-cl)':'#fff'};cursor:pointer;font-size:12px;font-weight:${sel?'700':'400'};color:${sel?'var(--azul)':'var(--negro)'};transition:all .15s;white-space:nowrap;flex-shrink:0">
       <div class="av" style="width:20px;height:20px;font-size:9px;background:${bg};color:${fg};flex-shrink:0">${inic(p.nombre)}</div>
-      ${abreviarNombre(p.nombre)}${sel?' ✓':''}
+      ${escHtml(abreviarNombre(p.nombre))}${sel?' ✓':''}
     </button>`;
   });
   h+=`</div>
     <div style="font-size:10px;color:var(--gris);margin-top:5px;text-align:center">↕ Desliza para ver todos los participantes</div>
   </div>`;
 
-  // Botón PDF
-  h+=`<div style="text-align:right;margin-bottom:8px">
-    <button class="btn btn-azul" onclick="generarPDF()" style="font-size:12px">📄 Guardar / Imprimir PDF</button>
-  </div>`;
+  // Botón PDF solo para admin
+  if(ADMIN){
+    h+=`<div style="text-align:right;margin-bottom:8px">
+      <button class="btn btn-azul" onclick="generarPDF()" style="font-size:12px">📄 PDF pronósticos</button>
+    </div>`;
+  }
 
   h+=`<div class="gtabs" id="vttabs">`;
   Object.keys(GRUPOS).forEach((g,i)=>{
@@ -873,6 +990,21 @@ function toggleVtSeleccion(uid){
   renderVerTodos();
 }
 
+
+// Calcula la clasificación pronosticada de un participante en un grupo
+// respetando el orden manual cuando hay empate técnico
+function clasifPronPart(uid, g){
+  const ps=genPs(g);
+  const pG=DB.pronosticos[uid]?.[g]||{};
+  const ordenManual=DB.pronosticos[uid]?.['__orden__']?.[g]||[];
+  const partidos=ps.map(p=>{
+    const k=pk(p.local,p.vis);
+    const pr=pG[k]||{};
+    return{...p,g1:pr.g1??'',g2:pr.g2??''};
+  });
+  return clasificar(partidos,g,ordenManual);
+}
+
 function vtG(g,btn){
   document.querySelectorAll('[id^="vttab-"]').forEach(t=>t.classList.remove('active'));
   const t=btn||document.getElementById('vttab-'+g);if(t)t.classList.add('active');
@@ -891,7 +1023,7 @@ function vtG(g,btn){
     <table style="min-width:300px"><thead><tr>
       <th style="white-space:nowrap">Partido</th>
       <th style="text-align:center;background:var(--azul-cl);color:#1e40af;white-space:nowrap;min-width:44px">Real</th>
-      ${parts.map(p=>`<th style="text-align:center;font-size:11px;white-space:nowrap">${abreviarNombre(p.nombre)}</th>`).join('')}
+      ${parts.map(p=>`<th style="text-align:center;font-size:11px;white-space:nowrap">${escHtml(abreviarNombre(p.nombre))}</th>`).join('')}
     </tr></thead><tbody>`;
   ps.forEach(p=>{
     const key=pk(p.local,p.vis),re=rG[key]||{};
@@ -912,7 +1044,70 @@ function vtG(g,btn){
     });
     h+='</tr>';
   });
-  h+=`</tbody></table></div></div>`;
+  h+=`</tbody></table></div>`;
+
+  // ── Tabla de clasificación pronosticada por participante ──
+  const posIcons=['1°','2°','3°','4°'];
+  const posColors=['#1b4332','#1e40af','#92400e','#374151']; // verde, azul, ámbar, negro
+  h+=`<div style="margin-top:10px">
+    <div style="font-size:11px;font-weight:700;color:var(--gris);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px">
+      Clasificación pronosticada — Grupo ${g}
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="min-width:280px;font-size:11px">
+      <thead><tr>
+        <th style="text-align:center;width:36px">Pos.</th>
+        <th style="text-align:center;background:var(--azul-cl);color:#1e40af;white-space:nowrap;min-width:80px">Real</th>
+        ${parts.map(p=>`<th style="text-align:center;font-size:10px;white-space:nowrap">${escHtml(abreviarNombre(p.nombre))}</th>`).join('')}
+      </tr></thead><tbody>`;
+
+  // Clasificación real del grupo (si hay resultados completos)
+  const totalPartidos=genPs(g).length;
+  const resGrupo=DB.resultados[g]||{};
+  const partidosConRes=genPs(g).filter(p=>{const re=resGrupo[pk(p.local,p.vis)]||{};return re.g1!==undefined&&re.g1!=='';}).length;
+  const grupoCompleto=partidosConRes===totalPartidos;
+  const ordenReal=DB.resultados['__orden__']?.[g]||[];
+  let clasifReal=[];
+  if(grupoCompleto){
+    const psReal=genPs(g).map(p=>{const k=pk(p.local,p.vis);const re=resGrupo[k]||{};return{...p,g1:re.g1??'',g2:re.g2??''};});
+    clasifReal=clasificar(psReal,g,ordenReal);
+  }
+
+  for(let pos=0;pos<4;pos++){
+    const equipoReal=clasifReal[pos]?.equipo||'';
+    h+=`<tr>
+      <td style="text-align:center;font-weight:700;color:${posColors[pos]}">${posIcons[pos]}</td>
+      <td style="text-align:center;background:var(--azul-cl);font-weight:600;font-size:10px;white-space:nowrap">${equipoReal||'<span style="color:#999">—</span>'}</td>`;
+    parts.forEach(part=>{
+      const clasifP=clasifPronPart(part.id,g);
+      const eq=clasifP[pos]?.equipo||'';
+      // Verificar si hay empate técnico no resuelto en esta posición
+      const empates=detectarEmpatesTecnicos(clasifP);
+      const enEmpateNoResuelto=empates.some(gr=>gr.includes(eq)&&gr.length>1);
+      let cellStyle='font-weight:600;font-size:10px;';
+      if(pos===3){
+        cellStyle+='color:#374151;'; // 4° siempre negro
+      } else if(grupoCompleto&&eq&&clasifReal.length>0){
+        // Con resultado real: colores según acierto/fallo
+        if(clasifReal[pos]?.equipo===eq)                                    cellStyle+='color:#1b4332;'; // correcto: verde
+        else if(clasifReal.slice(0,3).map(x=>x.equipo).includes(eq))       cellStyle+='color:#1e40af;'; // en top-3: azul
+        else                                                                  cellStyle+='color:#c0392b;'; // incorrecto: rojo
+      } else {
+        // Sin resultado real: color según posición pronosticada
+        cellStyle+='color:'+posColors[pos]+';';
+      }
+      h+=`<td style="text-align:center;${cellStyle}white-space:nowrap">
+        ${escHtml(eq)||'—'}${enEmpateNoResuelto?'<span title="Empate técnico" style="color:var(--ambar);font-size:9px">⚠</span>':''}
+      </td>`;
+    });
+    h+='</tr>';
+  }
+  h+=`</tbody></table></div>
+    <div style="font-size:9px;color:var(--gris);margin-top:4px">
+      ${grupoCompleto?'<span style="color:var(--verde);font-weight:600">■</span> correcto &nbsp; <span style="color:#1e40af;font-weight:600">■</span> en top-3 &nbsp; <span style="color:var(--rojo);font-weight:600">■</span> incorrecto':'Colores disponibles cuando el grupo tenga todos los resultados reales'}
+    </div>
+  </div></div>`;
+
   document.getElementById('vt-gbody').innerHTML=h;
 }
 
@@ -981,8 +1176,8 @@ function renderAPLista(){
     const btnDel='<button class="btn btn-rojo" style="font-size:11px;padding:4px 8px" onclick="delP(\''+p.id+'\')">✕</button>';
     return '<div class="rrow">'+
       '<div class="av" style="width:32px;height:32px;font-size:12px;background:'+bg+';color:'+fg+'">'+inic(p.nombre)+'</div>'+
-      '<div style="flex:1"><div style="font-weight:700;font-size:13px">'+p.nombre+'</div>'+
-      '<div style="font-size:12px;color:var(--gris)">'+p.email+' · '+(p.bloqueado?'✓ Enviado':'Pendiente')+'</div></div>'+
+      '<div style="flex:1"><div style="font-weight:700;font-size:13px">'+escHtml(p.nombre)+'</div>'+
+      '<div style="font-size:12px;color:var(--gris)">'+escHtml(p.email)+' · '+(p.bloqueado?'✓ Enviado':'Pendiente')+'</div></div>'+
       '<div style="display:flex;gap:4px">'+btnReset+btnDesblq+btnDel+'</div></div>';
   }).join('');
 }
@@ -1007,13 +1202,13 @@ async function addP(){
     errEl.className='alert a-err';errEl.textContent='Ya existe ese email';errEl.style.display='block';return;
   }
   const id='u'+Date.now()+Math.random().toString(36).slice(2,5);
-  DB.participantes.push({id,nombre,email,passHash:hash(pass),bloqueado:false});
+  DB.participantes.push({id,nombre:escHtml(nombre),email,passHash:await hash(pass),bloqueado:false});
   document.getElementById('np-n').value='';
   document.getElementById('np-e').value='';
   document.getElementById('np-p').value='';
   await guardarDatos(); renderAPLista(); renderRanking();
   errEl.className='alert a-ok';
-  errEl.innerHTML='✓ Añadido. Comparte con '+nombre+':<br><strong>Email:</strong> '+email+' &nbsp; <strong>Contraseña:</strong> '+pass;
+  errEl.innerHTML='✓ Añadido. Comparte con '+escHtml(nombre)+':<br><strong>Email:</strong> '+escHtml(email)+' &nbsp; <strong>Contraseña:</strong> '+escHtml(pass);
   errEl.style.display='block';
 }
 
@@ -1021,7 +1216,7 @@ async function resetPassP(uid){
   const p=DB.participantes.find(x=>x.id===uid);if(!p)return;
   const np=prompt('Nueva contraseña para '+p.nombre+':');
   if(!np||np.trim().length<3){alert('Contraseña muy corta');return;}
-  p.passHash=hash(np.trim());
+  p.passHash=await hash(np.trim());
   const ok=await guardarDatos();
   if(ok) alert('✓ Contraseña actualizada.\nEmail: '+p.email+'\nNueva contraseña: '+np.trim());
   else alert('⚠ Error guardando.');
@@ -1255,8 +1450,8 @@ function renderElim(){
         <button class="btn btn-gris" style="font-size:11px;padding:3px 10px;margin-left:8px" onclick="reabrirElim()">✏️ Modificar</button>
       </div>`
     :'<div class="alert a-warn">Llena tu bracket completo. Al enviar quedará <strong>bloqueado definitivamente</strong>.</div>';
-  // Botón PDF solo cuando todos han enviado
-  if(todosEnviaron){
+  // Botón PDF solo para admin y cuando todos han enviado
+  if(ADMIN&&todosEnviaron){
     h+=`<div style="text-align:right;margin-bottom:8px">
       <button class="btn btn-azul" onclick="generarPDFElim()" style="font-size:12px">📄 PDF Eliminación Directa</button>
     </div>`;
@@ -1288,6 +1483,10 @@ function elimTabU(rid,btn){
     const eqVis   = pronPid.vis   || equiposAdmin[pid]?.vis   || '';
     const re=resElim[pid]||{};
     const tieneReal=re.g1!==undefined&&re.g1!=='';
+    // Empate en pronóstico para botón penales
+    const g1v=pronPid.g1!==undefined&&pronPid.g1!==''?+pronPid.g1:null;
+    const g2v=pronPid.g2!==undefined&&pronPid.g2!==''?+pronPid.g2:null;
+    const hayEmpate=g1v!==null&&g2v!==null&&g1v===g2v;
 
     if(!eqLocal&&!eqVis&&rid!=='r16'){
       h+=`<div class="match-row" style="color:var(--gris);font-size:12px;justify-content:center;padding:8px 0">
@@ -1300,24 +1499,39 @@ function elimTabU(rid,btn){
       continue;
     }
 
-    let rowStyle='';
+    // ── Determinar coincidencia de equipos ──
+    const eqAdmin=equiposAdmin[pid]||{};
+    const equiposCoincidenConReal = rid==='r16' ||
+      (pronPid.local&&pronPid.vis&&eqAdmin.local&&eqAdmin.vis&&
+       pronPid.local===eqAdmin.local&&pronPid.vis===eqAdmin.vis);
+
+    // ── Color de franja según resultado ──
+    let rowBg='';
     if(tieneReal&&pronPid.g1!==undefined&&pronPid.g1!==''){
       const pg1=+pronPid.g1,pg2=+pronPid.g2,rg1=+re.g1,rg2=+re.g2;
-      rowStyle=pg1===rg1&&pg2===rg2?'background:rgba(45,106,79,.08)':signo(pg1,pg2)===signo(rg1,rg2)?'background:rgba(29,53,87,.06)':'background:rgba(192,57,43,.06)';
+      if(equiposCoincidenConReal){
+        if(pg1===rg1&&pg2===rg2)                       rowBg='background:rgba(45,106,79,.13);border-left:3px solid var(--verde);';      // Verde: exacto
+        else if(signo(pg1,pg2)===signo(rg1,rg2))       rowBg='background:rgba(29,53,87,.10);border-left:3px solid var(--azul2);';       // Azul: ganador/empate
+        else                                            rowBg='background:rgba(200,200,200,.10);border-left:3px solid var(--gris-md);';  // Gris: fallo marcador
+      } else {
+        // Equipos diferentes — franja ámbar
+        rowBg='background:rgba(180,83,9,.10);border-left:3px solid var(--ambar);';
+      }
     }
 
-    // Detectar empate en pronóstico para mostrar botón penales
-    const g1v=pronPid.g1!==undefined&&pronPid.g1!==''?+pronPid.g1:null;
-    const g2v=pronPid.g2!==undefined&&pronPid.g2!==''?+pronPid.g2:null;
-    const hayEmpate=g1v!==null&&g2v!==null&&g1v===g2v;
+    h+=`<div style="padding:10px 8px;border-bottom:1px solid var(--gris-cl);${rowBg}border-radius:4px;margin-bottom:4px">
+      <div style="font-size:10px;color:var(--gris);font-weight:600;margin-bottom:6px;letter-spacing:.03em">PARTIDO ${i}</div>`;
 
-    h+=`<div style="padding:8px 0;border-bottom:1px solid var(--gris-cl);${rowStyle}">
-      <div style="font-size:10px;color:var(--gris);margin-bottom:3px">Partido ${i}</div>
-      <div class="match-row" style="margin-bottom:6px;flex-wrap:nowrap">
-        <span class="eq r" style="min-width:0;flex:1">${eqLocal}</span>`;
-
+    // ── Fila pronóstico del participante ──
+    const marcTachado = tieneReal&&pronPid.g1!==undefined&&pronPid.g1!==''&&!equiposCoincidenConReal;
+    const marcStyle = marcTachado ? 'text-decoration:line-through;opacity:.5;' : '';
+    h+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:12px">
+      <span style="color:var(--gris);font-size:10px;width:105px;flex-shrink:0;font-weight:600">Tu pronóstico:</span>
+      <span style="flex:1;text-align:right;font-weight:600;${marcStyle}">${eqLocal}</span>`;
     if(locked||tieneReal){
-      h+=`<span class="sval">${pronPid.g1??'—'}</span><span class="sdash">—</span><span class="sval">${pronPid.g2??'—'}</span>`;
+      h+=`<span style="${marcStyle}font-weight:700;font-size:13px;padding:0 4px">${pronPid.g1??'—'}</span>
+      <span style="color:var(--gris);${marcStyle}">—</span>
+      <span style="${marcStyle}font-weight:700;font-size:13px;padding:0 4px">${pronPid.g2??'—'}</span>`;
     } else {
       h+=`<input class="sinp" type="number" min="0" max="20" value="${pronPid.g1??''}"
           oninput="spElim('${pid}','g1',this.value,'${eqLocal}','${eqVis}','${rid}')">
@@ -1325,40 +1539,57 @@ function elimTabU(rid,btn){
          <input class="sinp" type="number" min="0" max="20" value="${pronPid.g2??''}"
           oninput="spElim('${pid}','g2',this.value,'${eqLocal}','${eqVis}','${rid}')">`;
     }
-    h+=`<span class="eq" style="min-width:0;flex:1">${eqVis}</span>`;
-    if(tieneReal) h+=`<span class="badge b-azul" style="font-size:10px;flex-shrink:0">${re.g1}—${re.g2}</span>`;
-    h+=`</div>`;
+    h+=`<span style="flex:1;font-weight:600;${marcStyle}">${eqVis}</span>
+      ${marcTachado?'<span class="badge b-ambar" style="font-size:9px;flex-shrink:0">equipos ≠</span>':''}
+    </div>`;
 
-    // Sección "¿Quién pasa?"
-    h+=`<div id="pasa-${pid}" style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
-      <span style="color:var(--gris);font-weight:600;flex-shrink:0">Pasa:</span>`;
+    // ── Fila marcador real (solo si existe) ──
+    if(tieneReal){
+      const realLocal=eqAdmin.local||eqLocal;
+      const realVis=eqAdmin.vis||eqVis;
+      h+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:12px">
+        <span style="color:var(--azul2);font-size:10px;width:105px;flex-shrink:0;font-weight:700">Marcador Real:</span>
+        <span style="flex:1;text-align:right;font-weight:600">${realLocal}</span>
+        <span style="font-weight:700;font-size:13px;padding:0 4px;color:var(--azul2)">${re.g1}</span>
+        <span style="color:var(--gris)">—</span>
+        <span style="font-weight:700;font-size:13px;padding:0 4px;color:var(--azul2)">${re.g2}</span>
+        <span style="flex:1;font-weight:600">${realVis}</span>
+      </div>`;
+    }
+
+    // ── Fila quién pasa ──
+    h+=`<div id="pasa-${pid}" style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap;margin-top:4px">`;
 
     if(locked||tieneReal){
       const acierto=tieneReal&&pronPid.ganador===re.ganador;
       const fallo=tieneReal&&pronPid.ganador&&pronPid.ganador!==re.ganador;
-      h+=`<span class="badge ${acierto?'b-verde':fallo?'b-rojo':'b-gris'}">${pronPid.ganador||'—'}</span>`;
-      if(tieneReal) h+=`<span class="badge b-azul" style="font-size:10px">Real: ${re.ganador}</span>`;
+      h+=`<span style="color:var(--gris);font-size:10px;width:105px;flex-shrink:0;font-weight:600">Pronosticaste:</span>`;
+      h+=`<span class="badge ${acierto?'b-verde':fallo?'b-rojo':'b-gris'}">${pronPid.ganador||'—'}${acierto?' ✓':fallo?' ✗':''}</span>`;
+      if(tieneReal){
+        h+=`<span style="color:var(--gris);font-size:10px;margin-left:4px;font-weight:600">Pasó:</span>`;
+        h+=`<span class="badge b-azul">${re.ganador||'—'}</span>`;
+      }
     } else if(!eqLocal){
       h+=`<span style="color:var(--gris);font-size:11px">Completa las rondas anteriores primero</span>`;
     } else if(hayEmpate){
-      // Empate: mostrar botones de penales
+      h+=`<span style="color:var(--gris);font-size:10px;width:105px;flex-shrink:0;font-weight:600">Pasa:</span>`;
       h+=`<span style="color:var(--ambar);font-size:11px;font-weight:600">Empate → elige quién pasa por penales:</span>
          <button class="btn ${pronPid.ganador===eqLocal?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
            onclick="sgElim('${pid}','${eqLocal}','${rid}')">${eqLocal} 🥅</button>
          <button class="btn ${pronPid.ganador===eqVis?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
            onclick="sgElim('${pid}','${eqVis}','${rid}')">${eqVis} 🥅</button>`;
     } else if(g1v!==null&&g2v!==null){
-      // Hay marcador sin empate: ganador automático
       const autoGanador=g1v>g2v?eqLocal:eqVis;
       if(!pronPid.ganador||pronPid.ganador!==autoGanador){
-        // Auto-asignar ganador
         spElimGanador(pid, autoGanador, eqLocal, eqVis, rid);
-        h+=`<span class="badge b-verde">${autoGanador} ✓ (auto)</span>`;
+        h+=`<span style="color:var(--gris);font-size:10px;width:105px;flex-shrink:0;font-weight:600">Pasa:</span>`;
+        h+=`<span class="badge b-verde">${autoGanador} ✓</span>`;
       } else {
+        h+=`<span style="color:var(--gris);font-size:10px;width:105px;flex-shrink:0;font-weight:600">Pasa:</span>`;
         h+=`<span class="badge b-verde">${pronPid.ganador} ✓</span>`;
       }
     } else {
-      // Sin marcador aún: mostrar botones manuales
+      h+=`<span style="color:var(--gris);font-size:10px;width:105px;flex-shrink:0;font-weight:600">Pasa:</span>`;
       h+=`<button class="btn ${pronPid.ganador===eqLocal?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
            onclick="sgElim('${pid}','${eqLocal}','${rid}')">${eqLocal}</button>
          <button class="btn ${pronPid.ganador===eqVis?'btn-azul':'btn-gris'}" style="font-size:11px;padding:3px 10px"
@@ -1598,15 +1829,30 @@ function adminElimRonda(rid,btn){
         <input class="sinp" type="number" min="0" max="20" value="${re.g2??''}"
           onchange="setResElimA('${pid}','g2',this.value,'${rid}')">
         <span class="eq">${e.vis||'Visitante'}</span>
-      </div>
-      <div class="lbl" style="margin-bottom:5px">¿Quién avanza? (incluye penales si hubo)</div>
+      </div>`;
+    // Ganador: auto si marcador sin empate, botones solo si empate (penales)
+    const tieneResultado=re.g1!==undefined&&re.g1!==''&&re.g2!==undefined&&re.g2!=='';
+    const esEmpate=tieneResultado&&+re.g1===+re.g2;
+    if(tieneResultado&&!esEmpate){
+      // Ganador automático — solo mostrar quién pasa, sin botones
+      h+=`<div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+        <span style="font-size:12px;color:var(--gris);font-weight:600">Avanza automáticamente:</span>
+        <span class="badge b-verde" style="font-size:12px">${re.ganador||'—'} ✓</span>
+      </div>`;
+    } else if(esEmpate){
+      // Empate: el admin debe elegir quién pasó por penales
+      h+=`<div class="lbl" style="margin-bottom:5px;color:var(--ambar)">Empate — ¿Quién avanzó por penales?</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn ${re.ganador===e.local&&e.local?'btn-verde':'btn-gris'}" style="font-size:12px;padding:5px 12px"
-          onclick="setGanadorElimA('${pid}','L','${rid}')">${e.local||'Local'} ${re.ganador===e.local&&e.local?'✓':''}</button>
+          onclick="setGanadorElimA('${pid}','L','${rid}')">${e.local||'Local'} ${re.ganador===e.local&&e.local?'✓ pasa':''}</button>
         <button class="btn ${re.ganador===e.vis&&e.vis?'btn-verde':'btn-gris'}" style="font-size:12px;padding:5px 12px"
-          onclick="setGanadorElimA('${pid}','V','${rid}')">${e.vis||'Visitante'} ${re.ganador===e.vis&&e.vis?'✓':''}</button>
-      </div>
-    </div>`;
+          onclick="setGanadorElimA('${pid}','V','${rid}')">${e.vis||'Visitante'} ${re.ganador===e.vis&&e.vis?'✓ pasa':''}</button>
+      </div>`;
+    } else {
+      // Sin resultado aún — mostrar botones deshabilitados
+      h+=`<div style="font-size:11px;color:var(--gris);margin-top:4px;font-style:italic">El ganador se asignará automáticamente al ingresar el marcador.</div>`;
+    }
+    h+=`</div>`;
   }
 
   // Botón guardar al final (solo resultados, no equipos de 16avos)
@@ -1887,6 +2133,25 @@ function generarPDF(){
         });
         contenido+='</tr>';
       });
+      // Tabla de clasificación pronosticada
+      contenido+=`</tbody></table>`;
+      contenido+=`<table style="margin-top:2px"><thead><tr>
+        <th class="pos-col">Pos.</th>
+        ${bloque.map(p=>`<th>${abreviarNombre(p.nombre)}</th>`).join('')}
+      </tr></thead><tbody>`;
+      const posLbls=['1°','2°','3°','4°'];
+      const posClrs=['#1b4332','#1e40af','#92400e','#374151']; // verde, azul, ámbar, negro
+      for(let pos=0;pos<4;pos++){
+        contenido+=`<tr><td class="pos-col">${posLbls[pos]}</td>`;
+        bloque.forEach(part=>{
+          const cp=clasifPronPart(part.id,g);
+          const eq=cp[pos]?.equipo||'—';
+          // PDF de pronósticos: solo colores por posición, sin comparar con resultados reales
+          const color=pos<3?posClrs[pos]:'#374151';
+          contenido+=`<td style="color:${color};font-weight:600">${eq}</td>`;
+        });
+        contenido+='</tr>';
+      }
       contenido+=`</tbody></table></div>`;
     });
 
@@ -1915,6 +2180,7 @@ function generarPDF(){
       th{background:#f3f4f6;padding:3px 4px;text-align:center;font-size:8px;font-weight:700;color:#374151;border:1px solid #e5e7eb;white-space:nowrap}
       td{padding:2px 4px;text-align:center;font-size:8px;border:1px solid #e5e7eb}
       .partido-col{text-align:left!important;white-space:nowrap;font-size:8px}
+      .pos-col{text-align:center;font-weight:700;width:20px;background:#f3f4f6;color:#374151}
       .real-col{background:#dbeafe;font-weight:700;color:#1e40af;white-space:nowrap}
       tr:nth-child(even){background:#f9fafb}
       .salto-pagina{break-after:page;height:0}
@@ -1938,6 +2204,112 @@ function generarPDF(){
   </body></html>`);
   ventana.document.close();
   setTimeout(()=>ventana.focus(),300);
+}
+
+// ── PDF CLASIFICACIÓN ──
+function _abrirVentanaPDF(titulo, subtitulo, filas, columnas, notas){
+  const fecha=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'});
+  const ventana=window.open('','_blank');
+  let rows='';
+  filas.forEach((f,i)=>{
+    const medal=i===0?'🥇':i===1?'🥈':'';
+    rows+=`<tr class="${i<2?'top-row':''}">
+      <td class="pos">${medal||i+1}</td>
+      <td class="nombre">${f.nombre}</td>
+      ${columnas.map(col=>`<td class="num">${f[col.key]}</td>`).join('')}
+    </tr>`;
+  });
+  const thCols=columnas.map(c=>`<th>${c.label}</th>`).join('');
+  ventana.document.write(`<!DOCTYPE html><html lang="es"><head>
+    <meta charset="UTF-8">
+    <title>${titulo}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;padding:20px;color:#111}
+      .header{text-align:center;margin-bottom:20px;border-bottom:3px solid #1d3557;padding-bottom:14px}
+      h1{font-size:18px;font-weight:900;color:#1d3557;margin-bottom:3px}
+      .sub{font-size:12px;color:#666;margin-bottom:2px}
+      .fecha{font-size:11px;color:#999}
+      table{width:100%;border-collapse:collapse;font-size:13px}
+      th{background:#1d3557;color:#fff;padding:8px 10px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.04em}
+      th.num{text-align:center}
+      td{padding:7px 10px;border-bottom:1px solid #e5e7eb}
+      td.pos{font-weight:900;font-size:15px;width:36px;text-align:center}
+      td.nombre{font-weight:700}
+      td.num{text-align:center;font-weight:600}
+      tr:nth-child(even){background:#f9fafb}
+      tr.top-row{background:#fef9c3!important}
+      tr.top-row td{font-size:14px}
+      .notas{margin-top:14px;background:#f3f4f6;border-radius:6px;padding:10px 14px;font-size:11px;color:#555;line-height:1.7}
+      .notas strong{color:#1d3557}
+      .premios{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap}
+      .premio{background:#1d3557;color:#fff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;flex:1;text-align:center}
+      .premio .pct{font-size:20px;font-weight:900;display:block}
+      .no-print{text-align:center;margin-top:16px}
+      .btn{background:#1d3557;color:#fff;border:none;padding:10px 24px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+      @media print{.no-print{display:none}@page{margin:.8cm;size:A4 portrait}}
+    </style>
+  </head><body>
+    <div class="header">
+      <h1>⚽ Polla Familiar — Mundial FIFA 2026</h1>
+      <div class="sub">${titulo}</div>
+      <div class="fecha">Generado el ${fecha} · ${filas.length} participantes</div>
+    </div>
+    <table>
+      <thead><tr><th>Pos.</th><th>Participante</th>${thCols}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="premios">
+      <div class="premio">🥇 1.er lugar<span class="pct">35%</span>del pozo</div>
+      <div class="premio">🥈 2.do lugar<span class="pct">15%</span>del pozo</div>
+    </div>
+    ${notas?`<div class="notas">${notas}</div>`:''}
+    <div class="no-print">
+      <button class="btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+    </div>
+  </body></html>`);
+  ventana.document.close();
+  setTimeout(()=>ventana.focus(),300);
+}
+
+function generarPDFClasifGrupos(){
+  const hayRes=Object.keys(DB.resultados||{}).some(g=>
+    Object.keys(DB.resultados[g]||{}).some(k=>{const re=DB.resultados[g][k];return re&&re.g1!==undefined&&re.g1!=='';}));
+  const filas=DB.participantes.map(p=>{
+    const r=calcPuntos(DB.pronosticos[p.id]||{},DB.resultados);
+    return{nombre:abreviarNombre(p.nombre),pts:r.total,pM:r.pM,pG:r.pG,
+           estado:p.bloqueado?'✓ Enviado':'Pendiente'};
+  }).sort((a,b)=>hayRes?b.pts-a.pts:a.nombre.localeCompare(b.nombre));
+  _abrirVentanaPDF(
+    'Clasificación — Fase de Grupos',
+    'Puntos acumulados en la fase de grupos',
+    filas,
+    [{key:'pts',label:'Total'},{key:'pM',label:'Marcadores'},{key:'pG',label:'Grupos'},{key:'estado',label:'Estado'}],
+    '<strong>Puntuación:</strong> 5 pts marcador exacto · 2 pts ganador/empate · 3 pts posición exacta grupo · 2 pts top-3 posición incorrecta'
+  );
+}
+
+function generarPDFClasifElim(){
+  const hayRes=Object.keys(DB.resultadosElim||{}).some(k=>{
+    const re=(DB.resultadosElim||{})[k];return re&&re.g1!==undefined&&re.g1!=='';});
+  const filas=DB.participantes.map(p=>{
+    const r=calcPuntosElim(DB.pronosticosElim?.[p.id]||{},DB.resultadosElim||{});
+    // Campeón pronosticado
+    const campPron=((DB.pronosticosElim?.[p.id]||{})['rfin_1']||{}).ganador||'—';
+    return{nombre:abreviarNombre(p.nombre),pts:r.total,pM:r.pM,pA:r.pA,
+           camp:campPron, estado:p.bloqueadoElim?'✓ Enviado':'Pendiente'};
+  }).sort((a,b)=>hayRes?b.pts-a.pts:a.nombre.localeCompare(b.nombre));
+  // Campeón real
+  const campReal=((DB.resultadosElim||{})['rfin_1']||{}).ganador||'';
+  _abrirVentanaPDF(
+    'Clasificación — Eliminación Directa',
+    'Puntos acumulados en la fase eliminatoria (independiente de grupos)',
+    filas,
+    [{key:'pts',label:'Total'},{key:'pM',label:'Marcadores'},{key:'pA',label:'Avance'},{key:'camp',label:'Campeón pronosticado'},{key:'estado',label:'Estado'}],
+    campReal
+      ?`<strong>Campeón real: ${campReal} 🏆</strong> · Puntuación: 5 pts marcador exacto · 2 pts ganador/empate · 5-8 pts por avance según ronda`
+      :'<strong>Puntuación:</strong> 5 pts marcador exacto · 2 pts ganador/empate · 5 pts avance a octavos/cuartos · 6 pts semifinal · 7 pts final · 8 pts campeón'
+  );
 }
 
 // ── NAVEGACIÓN ──
@@ -1981,6 +2353,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
