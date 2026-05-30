@@ -88,6 +88,7 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
 .dot-ok{background:var(--verde)}.dot-err{background:var(--rojo)}.dot-warn{background:#f59e0b}
 @media(max-width:480px){.grid4{grid-template-columns:repeat(2,1fr)}.eq{font-size:11px}.elim-label{display:none}}
 @media(min-width:481px){.elim-label{display:inline}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
 </style>
 </head>
 <body>
@@ -695,9 +696,19 @@ function mostrarFormPron(p){
     </button>`;
   });
   h+=`</div><div id="gpron-body"></div>`;
-  if(!locked) h+=`<div style="margin-top:14px;display:flex;justify-content:flex-end;align-items:center;gap:8px">
-    <span style="font-size:12px;color:var(--gris)" id="pron-cnt"></span>
-    <button class="btn btn-verde" onclick="pedirConfirm()">✓ Enviar mis pronósticos</button>
+  if(!locked) h+=`<div style="margin-top:14px" id="pron-footer">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--gris)" id="pron-cnt">0/72 partidos completados</span>
+          <span style="font-size:11px;color:var(--gris)" id="pron-pct">0%</span>
+        </div>
+        <div style="height:6px;background:var(--gris-md);border-radius:99px;overflow:hidden">
+          <div id="pron-bar" style="height:100%;background:var(--verde);border-radius:99px;width:0%;transition:width .3s"></div>
+        </div>
+      </div>
+    </div>
+    <div id="pron-btn-area" style="text-align:right"></div>
   </div>`;
   h+='</div>';
   document.getElementById('pron-form').innerHTML=h;
@@ -714,7 +725,25 @@ function actCnt(){
   const el=document.getElementById('pron-cnt');if(!el)return;
   let tot=0,ing=0;
   Object.keys(GRUPOS).forEach(g=>{const ps=genPs(g);tot+=ps.length;ing+=contarIngs(UID,g);});
-  el.textContent=ing+'/'+tot+' partidos ingresados';
+  const pct=tot>0?Math.round(ing/tot*100):0;
+  el.textContent=ing+'/'+tot+' partidos completados';
+  const pctEl=document.getElementById('pron-pct');
+  if(pctEl) pctEl.textContent=pct+'%';
+  const bar=document.getElementById('pron-bar');
+  if(bar){
+    bar.style.width=pct+'%';
+    bar.style.background=ing===tot?'var(--verde)':'var(--azul2)';
+  }
+  // Mostrar botón solo cuando todos los partidos estén completos
+  const btnArea=document.getElementById('pron-btn-area');
+  if(btnArea){
+    if(ing===tot){
+      btnArea.innerHTML='<button class="btn btn-verde" onclick="pedirConfirm()" style="animation:pulse .6s ease-in-out">✓ Enviar mis pronósticos</button>';
+    } else {
+      const falta=tot-ing;
+      btnArea.innerHTML='<span style="font-size:11px;color:var(--gris);font-style:italic">Completa los '+falta+' partidos restantes para poder enviar</span>';
+    }
+  }
 }
 
 function mostrarGrupoPron(g,btn){
@@ -1084,20 +1113,28 @@ function vtG(g,btn){
       // Verificar si hay empate técnico no resuelto en esta posición
       const empates=detectarEmpatesTecnicos(clasifP);
       const enEmpateNoResuelto=empates.some(gr=>gr.includes(eq)&&gr.length>1);
-      let cellStyle='font-weight:600;font-size:10px;';
+      let badgeCls='b-gris';
+      let checkmark='';
       if(pos===3){
-        cellStyle+='color:#374151;'; // 4° siempre negro
+        badgeCls=''; // 4° sin badge, solo texto negro
       } else if(grupoCompleto&&eq&&clasifReal.length>0){
-        // Con resultado real: colores según acierto/fallo
-        if(clasifReal[pos]?.equipo===eq)                                    cellStyle+='color:#1b4332;'; // correcto: verde
-        else if(clasifReal.slice(0,3).map(x=>x.equipo).includes(eq))       cellStyle+='color:#1e40af;'; // en top-3: azul
-        else                                                                  cellStyle+='color:#c0392b;'; // incorrecto: rojo
+        if(clasifReal[pos]?.equipo===eq){
+          badgeCls='b-verde';
+          checkmark=' ✓';
+        } else if(clasifReal.slice(0,3).map(x=>x.equipo).includes(eq)){
+          badgeCls='b-azul';
+        } else {
+          badgeCls='b-rojo';
+        }
       } else {
-        // Sin resultado real: color según posición pronosticada
-        cellStyle+='color:'+posColors[pos]+';';
+        // Sin resultado real: fondo según posición
+        badgeCls=pos===0?'b-verde':pos===1?'b-azul':pos===2?'b-ambar':'';
       }
-      h+=`<td style="text-align:center;${cellStyle}white-space:nowrap">
-        ${escHtml(eq)||'—'}${enEmpateNoResuelto?'<span title="Empate técnico" style="color:var(--ambar);font-size:9px">⚠</span>':''}
+      const cellContent=badgeCls
+        ?`<span class="badge ${badgeCls}" style="font-size:10px;white-space:nowrap">${escHtml(eq)||'—'}${checkmark}</span>`
+        :`<span style="font-size:10px;font-weight:600;color:#374151;white-space:nowrap">${escHtml(eq)||'—'}</span>`;
+      h+=`<td style="text-align:center;padding:3px 4px">
+        ${cellContent}${enEmpateNoResuelto?'<span title="Empate técnico" style="color:var(--ambar);font-size:9px">⚠</span>':''}
       </td>`;
     });
     h+='</tr>';
@@ -2353,6 +2390,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
