@@ -68,11 +68,18 @@ tr:last-child td{border-bottom:none}.tc{text-align:center}
 .tviva th{background:var(--gris-cl);padding:4px 6px}.tviva td{padding:4px 6px}
 .p1{color:var(--verde-dk);font-weight:700}.p2{color:#1e40af;font-weight:700}.p3{color:var(--ambar);font-weight:700}
 .dg-p{color:var(--verde)}.dg-n{color:var(--rojo)}
-.rrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--gris-cl)}
-.rrow:last-child{border-bottom:none}
-.rnum{font-size:17px;font-weight:800;width:26px;color:var(--gris);flex-shrink:0}
-.r1 .rnum{color:#b45309}.r2 .rnum{color:#6b7280}.r3 .rnum{color:#92400e}
+.rrow{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-sm);margin-bottom:4px;background:#fff;border:1px solid var(--gris-md);transition:all .15s}
+.rrow:hover{border-color:var(--azul2)}
+.rrow.podio{padding:12px 14px;border-width:1.5px}
+.r1{background:linear-gradient(135deg,#fffbeb,#fef9c3);border-color:#f4c430}
+.r2{background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-color:#cbd5e1}
+.r3{background:linear-gradient(135deg,#fff7f0,#fef0e6);border-color:#d97706}
+.rnum{font-size:22px;font-weight:900;width:32px;text-align:center;flex-shrink:0;color:var(--gris)}
+.r1 .rnum{color:#b45309;font-size:26px}.r2 .rnum{color:#64748b;font-size:24px}.r3 .rnum{color:#b45309;font-size:22px}
 .av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+.pts-grande{font-size:24px;font-weight:900;color:var(--azul);flex-shrink:0;min-width:52px;text-align:right;line-height:1}
+.r1 .pts-grande{color:#b45309}.r2 .pts-grande{color:#64748b}.r3 .pts-grande{color:#92400e}
+.pts-label{font-size:9px;color:var(--gris);font-weight:600;text-align:right;margin-top:2px}
 .flexi{display:flex;align-items:center;gap:8px}.f1{flex:1}
 .pcard{display:flex;align-items:center;gap:10px;padding:10px;border:1.5px solid var(--gris-md);border-radius:var(--r-sm);cursor:pointer;transition:all .15s;margin-bottom:6px;background:#fff}
 .pcard:hover{border-color:var(--azul2);background:#f0f7ff}
@@ -188,6 +195,30 @@ pre.gas{background:#1e293b;color:#e2e8f0;border-radius:var(--r);padding:12px;fon
     <div id="modal-plist"></div>
     <hr class="divider">
     <button class="btn btn-gris btn-full" onclick="cerrarModal('modal-id')">Cancelar</button>
+  </div>
+</div>
+
+<!-- ══ MODAL: Cambiar contraseña ══ -->
+<div class="modal-bg" id="modal-cambiar-pass">
+  <div class="modal">
+    <h2>🔑 Cambiar contraseña</h2>
+    <div class="ig"><div class="lbl">Contraseña actual</div>
+      <input type="password" id="cp-actual" placeholder="Tu contraseña actual"
+        onkeydown="if(event.key==='Enter')document.getElementById('cp-nueva').focus()">
+    </div>
+    <div class="ig"><div class="lbl">Nueva contraseña</div>
+      <input type="password" id="cp-nueva" placeholder="Nueva contraseña"
+        onkeydown="if(event.key==='Enter')document.getElementById('cp-confirmar').focus()">
+    </div>
+    <div class="ig"><div class="lbl">Confirmar nueva contraseña</div>
+      <input type="password" id="cp-confirmar" placeholder="Repite la nueva contraseña"
+        onkeydown="if(event.key==='Enter')cambiarPassParticipante()">
+    </div>
+    <div id="cp-error" class="alert a-err" style="display:none;margin-bottom:8px"></div>
+    <div class="flexi" style="gap:8px;margin-top:4px">
+      <button class="btn btn-gris f1" onclick="cerrarModal('modal-cambiar-pass');limpiarFormCambiarPass()">Cancelar</button>
+      <button class="btn btn-verde f1" onclick="cambiarPassParticipante()">Guardar contraseña</button>
+    </div>
   </div>
 </div>
 
@@ -631,19 +662,31 @@ function renderRanking(){
     return{...p,pts:r.total,pM:r.pM,pA:r.pA};
   }).sort((a,b)=>hayResElim?b.pts-a.pts:a.nombre.localeCompare(b.nombre));
 
-  function filaRanking(p,i,hayRes,cols){
+  function filaRanking(p,i,hayRes,cols,ptsVal){
     const [bg,fg]=avc(p.id);
-    const num=hayRes?`<div class="rnum">${i+1}</div>`:'<div class="rnum" style="color:var(--gris-md)">—</div>';
-    const cls=hayRes&&i<3?'r'+(i+1):'';
-    return `<div class="rrow ${cls}">${num}
-      <div class="av" style="width:34px;height:34px;font-size:12px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:700">${escHtml(p.nombre)}</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">
-          ${hayRes?cols(p):'<span class="badge b-gris">sin resultados aún</span>'}
-          ${p.bloqueado?'<span class="badge b-gris" title="Pronósticos enviados">✓</span>':''}
+    const esPodio=hayRes&&i<3;
+    const posLabel=hayRes?(i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`):'—';
+    const posClass=esPodio?'rrow podio r'+(i+1):'rrow';
+    const avSize=esPodio?40:32;
+    const avFont=esPodio?14:12;
+    const ptsDisplay=hayRes?`
+      <div style="text-align:right;flex-shrink:0">
+        <div class="pts-grande" style="${esPodio?'':'color:#374151;font-size:20px'}">${ptsVal(p)}</div>
+        <div class="pts-label">puntos</div>
+        <div style="display:flex;gap:3px;justify-content:flex-end;margin-top:4px;flex-wrap:wrap">
+          ${cols(p)}
         </div>
+      </div>`
+    :'<span class="badge b-gris" style="flex-shrink:0">sin resultados</span>';
+
+    return `<div class="${posClass}">
+      <div class="rnum">${posLabel}</div>
+      <div class="av" style="width:${avSize}px;height:${avSize}px;font-size:${avFont}px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:${esPodio?14:13}px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.nombre)}</div>
+        ${p.bloqueado?'':'<span style="font-size:9px;color:var(--rojo);font-weight:600">pendiente</span>'}
       </div>
+      ${ptsDisplay}
     </div>`;
   }
 
@@ -655,10 +698,14 @@ function renderRanking(){
   </div>
   <div id="rtab-g-body">`;
   if(!rowsG.length) h+='<div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">El administrador debe añadir participantes.</div>';
-  else rowsG.forEach((p,i)=>{h+=filaRanking(p,i,hayResGrupos,p=>`<span class="badge b-oro">${p.pts} pts</span><span class="badge b-verde">${p.pM} marc.</span><span class="badge b-azul">${p.pG} grupos</span>`);});
+  else rowsG.forEach((p,i)=>{h+=filaRanking(p,i,hayResGrupos,
+    p=>`<span class="badge b-verde" style="font-size:10px">${p.pM} marc.</span><span class="badge b-azul" style="font-size:10px">${p.pG} grupos</span>`,
+    p=>p.pts);});
   h+=`</div><div id="rtab-e-body" style="display:none">`;
   if(!DB.bracketAbierto&&!hayResElim) h+='<div style="color:var(--gris);font-size:13px;padding:20px;text-align:center">La fase eliminatoria aún no ha comenzado.</div>';
-  else rowsE.forEach((p,i)=>{h+=filaRanking(p,i,hayResElim,p=>`<span class="badge b-oro">${p.pts} pts</span><span class="badge b-verde">${p.pM} marc.</span><span class="badge b-ambar">${p.pA} avance</span>`);});
+  else rowsE.forEach((p,i)=>{h+=filaRanking(p,i,hayResElim,
+    p=>`<span class="badge b-verde" style="font-size:10px">${p.pM} marc.</span><span class="badge b-ambar" style="font-size:10px">${p.pA} avance</span>`,
+    p=>p.pts);});
   h+=`</div>`;
   document.getElementById('ranking-lista').innerHTML=h;
   const infoEl=document.getElementById('estado-backend');
@@ -2166,7 +2213,7 @@ function generarPDF(){
         bloque.forEach(part=>{
           const pr=(DB.pronosticos[part.id]?.[g]?.[key])||{};
           const tieneP=pr.g1!==undefined&&pr.g1!=='';
-          contenido+=`<td style="color:#111;font-weight:600">${tieneP?pr.g1+'-'+pr.g2:'—'}</td>`;
+          contenido+=`<td style="color:#111;font-weight:600;text-align:center">${tieneP?pr.g1+'-'+pr.g2:'—'}</td>`;
         });
         contenido+='</tr>';
       });
@@ -2177,15 +2224,15 @@ function generarPDF(){
         ${bloque.map(p=>`<th>${abreviarNombre(p.nombre)}</th>`).join('')}
       </tr></thead><tbody>`;
       const posLbls=['1°','2°','3°','4°'];
-      const posClrs=['#1b4332','#1e40af','#92400e','#374151']; // verde, azul, ámbar, negro
+      // PDF de pronósticos: todas las fuentes en negro — son solo pronósticos sin resultados reales
       for(let pos=0;pos<4;pos++){
         contenido+=`<tr><td class="pos-col">${posLbls[pos]}</td>`;
         bloque.forEach(part=>{
           const cp=clasifPronPart(part.id,g);
           const eq=cp[pos]?.equipo||'—';
           // PDF de pronósticos: solo colores por posición, sin comparar con resultados reales
-          const color=pos<3?posClrs[pos]:'#374151';
-          contenido+=`<td style="color:${color};font-weight:600">${eq}</td>`;
+          const color='#111';
+          contenido+=`<td style="color:${color};font-weight:600;text-align:center">${eq}</td>`;
         });
         contenido+='</tr>';
       }
@@ -2349,6 +2396,49 @@ function generarPDFClasifElim(){
   );
 }
 
+// ── CAMBIAR CONTRASEÑA (participante) ──
+function limpiarFormCambiarPass(){
+  ['cp-actual','cp-nueva','cp-confirmar'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value='';
+  });
+  const err=document.getElementById('cp-error');
+  if(err)err.style.display='none';
+}
+
+async function cambiarPassParticipante(){
+  const actual=document.getElementById('cp-actual').value;
+  const nueva=document.getElementById('cp-nueva').value;
+  const confirmar=document.getElementById('cp-confirmar').value;
+  const errEl=document.getElementById('cp-error');
+  errEl.style.display='none';
+
+  if(!actual||!nueva||!confirmar){
+    errEl.textContent='Completa todos los campos';errEl.style.display='block';return;
+  }
+  if(nueva.length<4){
+    errEl.textContent='La nueva contraseña debe tener al menos 4 caracteres';errEl.style.display='block';return;
+  }
+  if(nueva!==confirmar){
+    errEl.textContent='Las contraseñas nuevas no coinciden';errEl.style.display='block';return;
+  }
+
+  const p=DB.participantes.find(x=>x.id===UID);
+  if(!p){errEl.textContent='Error: usuario no encontrado';errEl.style.display='block';return;}
+
+  // Verificar contraseña actual
+  const hashActual=await hash(actual);
+  if(p.passHash!==hashActual){
+    errEl.textContent='La contraseña actual es incorrecta';errEl.style.display='block';return;
+  }
+
+  // Guardar nueva contraseña
+  p.passHash=await hash(nueva);
+  const ok=await guardarDatos();
+  cerrarModal('modal-cambiar-pass');
+  limpiarFormCambiarPass();
+  toast(ok?'✓ Contraseña actualizada correctamente':'⚠ Error al guardar. Intenta de nuevo.',ok?'verde':'rojo');
+}
+
 // ── NAVEGACIÓN ──
 function irA(page,btn){
   document.querySelectorAll('.pg').forEach(p=>p.style.display='none');
@@ -2375,7 +2465,8 @@ function actualizarHeader(){
   if(!UID){el.innerHTML='';return;}
   const p=DB.participantes.find(x=>x.id===UID);if(!p){el.innerHTML='';return;}
   const [bg,fg]=avc(p.id);
-  el.innerHTML='<div class="av" style="width:26px;height:26px;font-size:11px;background:'+bg+';color:'+fg+'">'+inic(p.nombre)+'</div><span>'+p.nombre.split(' ')[0]+'</span>'+salirBtn;
+  const cambiarBtn='<button onclick="abrirModal(\'modal-cambiar-pass\')" title="Cambiar contraseña" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;margin-left:4px">🔑</button>';
+  el.innerHTML='<div class="av" style="width:26px;height:26px;font-size:11px;background:'+bg+';color:'+fg+'">'+inic(p.nombre)+'</div><span>'+escHtml(p.nombre.split(' ')[0])+'</span>'+cambiarBtn+salirBtn;
 }
 let _tt;
 function toast(msg,color='verde'){
@@ -2390,6 +2481,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
