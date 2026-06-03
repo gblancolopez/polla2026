@@ -271,6 +271,7 @@ const AVC=[
 let DB={participantes:[],pronosticos:{},resultados:{},adminPass:'admin2026'};
 let UID=null, ADMIN=false;
 let VT_SELECCIONADOS=[]; // participantes seleccionados en Ver Todos (máx 4)
+let VT_ELIM_SEL=[];      // participantes seleccionados en Comparar brackets elim (máx 4)
 
 // ── SEGURIDAD ──
 // Escapa caracteres HTML para prevenir XSS cuando se inserta texto de usuarios en innerHTML
@@ -328,17 +329,17 @@ async function cargarDatos(){
   }
 }
 
-async function guardarDatos(btnEl){
-  localStorage.setItem('p26_db',JSON.stringify(DB));
-  // Mostrar indicador visual en el botón que disparó el guardado
-  let btnOrigText='', btnOrigDisabled=false;
+// ── GUARDADO GRANULAR (evita sobreescritura entre participantes) ──
+async function _post(body, btnEl){
+  localStorage.setItem('p26_db', JSON.stringify(DB));
   const saveSpinner=document.getElementById('save-spinner');
+  let btnOrigText='', btnOrigDisabled=false;
   if(saveSpinner) saveSpinner.style.display='flex';
   if(btnEl){btnOrigText=btnEl.innerHTML;btnOrigDisabled=btnEl.disabled;btnEl.innerHTML='⏳ Guardando...';btnEl.disabled=true;}
   try{
     const r=await fetch(BURL,{method:'POST',redirect:'follow',
       headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'setData',data:DB})});
+      body:JSON.stringify(body)});
     const j=await r.json();
     return !!j.ok;
   }catch(e){return false;}
@@ -346,6 +347,61 @@ async function guardarDatos(btnEl){
     if(saveSpinner) saveSpinner.style.display='none';
     if(btnEl){btnEl.innerHTML=btnOrigText;btnEl.disabled=btnOrigDisabled;}
   }
+}
+
+// Guardar pronósticos de un participante (solo sus datos)
+async function guardarPron(uid, btnEl){
+  const p=DB.participantes.find(x=>x.id===uid);
+  return _post({
+    action:'setPron', uid,
+    pron: DB.pronosticos[uid]||{},
+    bloqueado: p?.bloqueado,
+    passHash: p?.passHash
+  }, btnEl);
+}
+
+// Guardar pronósticos eliminatorios de un participante
+async function guardarPronElim(uid, btnEl){
+  const p=DB.participantes.find(x=>x.id===uid);
+  return _post({
+    action:'setPronElim', uid,
+    pron: DB.pronosticosElim?.[uid]||{},
+    bloqueadoElim: p?.bloqueadoElim
+  }, btnEl);
+}
+
+// Guardar resultados de un grupo específico
+async function guardarResGrupo(g, btnEl){
+  return _post({
+    action:'setRes', grupo:g,
+    resultados: DB.resultados[g]||{},
+    orden: DB.resultados['__orden__']?.[g]
+  }, btnEl);
+}
+
+// Guardar resultados eliminatorios (merge por partido)
+async function guardarResElim(btnEl){
+  return _post({
+    action:'setResElim',
+    resultadosElim: DB.resultadosElim||{},
+    equiposElim: DB.equiposElim||{}
+  }, btnEl);
+}
+
+// Guardar metadatos (participantes, config, equipos elim)
+async function guardarMeta(btnEl){
+  return _post({
+    action:'setMeta',
+    participantes: DB.participantes,
+    adminPass: DB.adminPass,
+    bracketAbierto: DB.bracketAbierto,
+    equiposElim: DB.equiposElim
+  }, btnEl);
+}
+
+// Compatibilidad: guardarDatos completo (solo para operaciones que necesitan todo)
+async function guardarDatos(btnEl){
+  return _post({action:'setData', data:DB}, btnEl);
 }
 
 // setEstado ya no se usa activamente — se mantiene por compatibilidad
@@ -965,7 +1021,7 @@ async function confirmarEnvio(){
   cerrarModal('modal-confirm');
   const p=DB.participantes.find(x=>x.id===UID);
   if(p) p.bloqueado=true;
-  const ok=await guardarDatos();
+  const ok=await guardarPron(UID);
   toast(ok?'✓ Pronósticos enviados y bloqueados':'⚠ Guardado localmente (revisa conexión)',ok?'verde':'ambar');
   renderPronosticos(); renderRanking();
 }
@@ -1020,10 +1076,12 @@ function renderVerTodos(){
     <div style="font-size:10px;color:var(--gris);margin-top:5px;text-align:center">↕ Desliza para ver todos los participantes</div>
   </div>`;
 
-  // Botón PDF solo para admin
+  // Botones PDF solo para admin
   if(ADMIN){
-    h+=`<div style="text-align:right;margin-bottom:8px">
-      <button class="btn btn-azul" onclick="generarPDF()" style="font-size:12px">📄 PDF pronósticos</button>
+    const hayPronElimVT=DB.participantes.some(x=>Object.keys(DB.pronosticosElim?.[x.id]||{}).length>0);
+    h+=`<div style="text-align:right;margin-bottom:8px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-azul" onclick="generarPDF()" style="font-size:12px">📄 PDF Grupos</button>
+      ${hayPronElimVT?'<button class="btn btn-azul" onclick="generarPDFElim()" style="font-size:12px">📄 PDF Eliminatorias</button>':''}
     </div>`;
   }
 
@@ -1301,7 +1359,7 @@ async function resetPassP(uid){
   const np=prompt('Nueva contraseña para '+p.nombre+':');
   if(!np||np.trim().length<3){alert('Contraseña muy corta');return;}
   p.passHash=await hash(np.trim());
-  const ok=await guardarDatos();
+  const ok=await guardarMeta();
   if(ok) alert('✓ Contraseña actualizada.\nEmail: '+p.email+'\nNueva contraseña: '+np.trim());
   else alert('⚠ Error guardando.');
 }
@@ -1380,7 +1438,7 @@ function tvivaA(g){
 }
 
 async function guardarRes(g,btnEl){
-  // Leer valores actuales del DOM antes de guardar
+  // Leer valores actuales del DOM antes de guardar — guardar solo este grupo
   genPs(g).forEach(p=>{
     const key=pk(p.local,p.vis);
     const g1El=document.getElementById('ar_'+g+'_'+key+'_g1');
@@ -1392,7 +1450,7 @@ async function guardarRes(g,btnEl){
       if(g2El&&g2El.value!=='')DB.resultados[g][key].g2=g2El.value;
     }
   });
-  const ok=await guardarDatos(btnEl); renderRanking();
+  const ok=await guardarResGrupo(g, btnEl); renderRanking();
   toast(ok?`✓ Resultados grupo ${g} guardados`:'⚠ Guardado localmente',ok?'verde':'ambar');
 }
 
@@ -1513,40 +1571,96 @@ function renderElim(){
   if(!el) return;
   const abierto=!!DB.bracketAbierto;
   const equipos=DB.equiposElim||{};
-  // Solo necesitamos que los 16avos estén configurados
   const tieneEq=Object.keys(equipos).filter(k=>k.startsWith('r16_')).length>=1;
-  if(!abierto||!tieneEq){
+
+  // Sin equipos configurados → mensaje genérico
+  if(!tieneEq){
     el.innerHTML=`<div class="card"><div class="ct">🔥 Fase eliminatoria</div>
-      <div class="alert a-info">${!tieneEq
-        ?'El administrador aún no ha configurado el bracket de 16avos. Estará disponible cuando termine la fase de grupos.'
-        :'El administrador aún no ha abierto los pronósticos eliminatorios.'}</div></div>`;
+      <div class="alert a-info">El administrador aún no ha configurado el bracket de 16avos. Estará disponible cuando termine la fase de grupos.</div></div>`;
     return;
   }
+
+  // Verificar si el participante ya tiene pronósticos guardados
+  const tienePron=Object.keys(DB.pronosticosElim?.[UID]||{}).length>0;
+
+  // Sin pronósticos y bracket cerrado → mensaje informativo
+  if(!abierto&&!tienePron){
+    el.innerHTML=`<div class="card"><div class="ct">🔥 Fase eliminatoria</div>
+      <div class="alert a-info">El administrador aún no ha abierto los pronósticos eliminatorios.</div></div>`;
+    return;
+  }
+
   const p=DB.participantes.find(x=>x.id===UID);
   const locked=!!p.bloqueadoElim;
-  // Todos los participantes han enviado su bracket?
   const todosEnviaron=DB.participantes.length>0&&DB.participantes.every(x=>x.bloqueadoElim);
-  // Propagar fixture del participante antes de renderizar
-  if(!locked) propagarFixture('pron', UID);
+
+  // Propagar fixture solo si el bracket está abierto y no está bloqueado
+  if(abierto&&!locked) propagarFixture('pron', UID);
+
   const pron=DB.pronosticosElim?.[UID]||{};
-  let h=locked
-    ?`<div class="locked">🔒 Tu bracket eliminatorio está enviado.
+
+  let h='';
+  if(!abierto){
+    // Bracket cerrado pero participante tiene pronósticos → mostrar con aviso
+    h+=`<div class="alert a-warn" style="margin-bottom:8px">🔒 Los pronósticos eliminatorios están cerrados. Solo puedes consultar tu bracket.</div>`;
+  } else if(locked){
+    h+=`<div class="locked">🔒 Tu bracket eliminatorio está enviado.
         <button class="btn btn-gris" style="font-size:11px;padding:3px 10px;margin-left:8px" onclick="reabrirElim()">✏️ Modificar</button>
-      </div>`
-    :'<div class="alert a-warn">Llena tu bracket completo. Al enviar quedará <strong>bloqueado definitivamente</strong>.</div>';
-  // Botón PDF solo para admin y cuando todos han enviado
-  if(ADMIN&&todosEnviaron){
+      </div>`;
+  } else {
+    h+='<div class="alert a-warn">Llena tu bracket completo. Al enviar quedará <strong>bloqueado definitivamente</strong>.</div>';
+  }
+
+  // Botón PDF para admin — aparece cuando hay al menos un participante con pronósticos
+  const hayPronElim=DB.participantes.some(x=>Object.keys(DB.pronosticosElim?.[x.id]||{}).length>0);
+  if(ADMIN&&hayPronElim){
     h+=`<div style="text-align:right;margin-bottom:8px">
       <button class="btn btn-azul" onclick="generarPDFElim()" style="font-size:12px">📄 PDF Eliminación Directa</button>
     </div>`;
   }
+
+  // Bracket del participante
   h+=`<div class="gtabs" id="elim-tabs">`;
   RONDAS.forEach((r,i)=>{
     h+='<button class="gtab '+(i===0?'active':'')+'" id="etabu-'+r.id+'" onclick="elimTabU(\''+r.id+'\',this)">'+r.label.split(' ')[0]+'</button>';
   });
   h+=`</div><div id="elim-ronda-body"></div>`;
+
+  // ── Sección "Comparar brackets" ──
+  // Inicializar selección para eliminatorias (independiente de VT_SELECCIONADOS de grupos)
+  VT_ELIM_SEL=VT_ELIM_SEL.filter(id=>DB.participantes.find(p=>p.id===id));
+  if(VT_ELIM_SEL.length===0) VT_ELIM_SEL=DB.participantes.slice(0,4).map(p=>p.id);
+
+  const partsConPron=DB.participantes.filter(x=>Object.keys(DB.pronosticosElim?.[x.id]||{}).length>0);
+  if(partsConPron.length>0){
+    h+=`<div style="margin-top:18px">
+      <div style="font-size:14px;font-weight:700;color:var(--azul);margin-bottom:10px;display:flex;align-items:center;gap:8px">
+        👥 Comparar brackets
+        <span style="font-size:11px;font-weight:400;color:var(--gris)">(selecciona hasta 4)</span>
+      </div>
+      <div class="card" style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+          <div style="font-size:12px;color:var(--gris)">${VT_ELIM_SEL.length} seleccionados de ${partsConPron.length}</div>
+        </div>
+        <div style="max-height:120px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:6px;padding:6px;border:1.5px solid var(--gris-md);border-radius:var(--r-sm);background:var(--gris-cl)">`;
+    partsConPron.forEach(p=>{
+      const sel=VT_ELIM_SEL.includes(p.id);
+      const [bg,fg]=avc(p.id);
+      h+=`<button onclick="toggleElimSel('${p.id}')" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;border:2px solid ${sel?'var(--azul)':'var(--gris-md)'};background:${sel?'var(--azul-cl)':'#fff'};cursor:pointer;font-size:12px;font-weight:${sel?'700':'400'};color:${sel?'var(--azul)':'var(--negro)'};transition:all .15s;white-space:nowrap;flex-shrink:0">
+        <div class="av" style="width:20px;height:20px;font-size:9px;background:${bg};color:${fg};flex-shrink:0">${inic(p.nombre)}</div>
+        ${escHtml(abreviarNombre(p.nombre))}${sel?' ✓':''}
+      </button>`;
+    });
+    h+=`</div>
+        <div style="font-size:10px;color:var(--gris);margin-top:5px;text-align:center">↕ Desliza para ver todos</div>
+      </div>
+      <div id="elim-vt-body"></div>
+    </div>`;
+  }
+
   el.innerHTML=h;
   elimTabU('r16',null);
+  if(partsConPron.length>0) renderElimVT();
 }
 
 function elimTabU(rid,btn){
@@ -1554,7 +1668,8 @@ function elimTabU(rid,btn){
   const t=btn||document.getElementById('etabu-'+rid);if(t)t.classList.add('active');
   const ronda=RONDAS.find(r=>r.id===rid);
   const p=DB.participantes.find(x=>x.id===UID);
-  const locked=!!p.bloqueadoElim;
+  // Tratar como bloqueado si: ya envió O el bracket está cerrado
+  const locked=!!p.bloqueadoElim||!DB.bracketAbierto;
   const pron=DB.pronosticosElim?.[UID]||{};
   const resElim=DB.resultadosElim||{};
   const equiposAdmin=DB.equiposElim||{};
@@ -1811,7 +1926,7 @@ async function confirmarEnvioElim(){
   cerrarModal('modal-confirm-elim');
   const p=DB.participantes.find(x=>x.id===UID);
   if(p)p.bloqueadoElim=true;
-  const ok=await guardarDatos();
+  const ok=await guardarPronElim(UID);
   toast(ok?'✓ Bracket enviado y bloqueado':'⚠ Guardado localmente',ok?'verde':'ambar');
   renderElim();
 }
@@ -1822,8 +1937,146 @@ function reabrirElim(){
   if(!p) return;
   if(!confirm('¿Quieres modificar tu bracket eliminatorio? Se conservarán todos tus pronósticos anteriores y podrás editarlos antes de volver a enviar.')) return;
   p.bloqueadoElim=false;
+  guardarPronElim(UID);
   renderElim();
   toast('✓ Bracket desbloqueado. Puedes modificar tus pronósticos.','verde');
+}
+
+function toggleElimSel(uid){
+  const idx=VT_ELIM_SEL.indexOf(uid);
+  if(idx>=0) VT_ELIM_SEL.splice(idx,1);
+  else{
+    if(VT_ELIM_SEL.length>=4){toast('Máximo 4 participantes para comparar','ambar');return;}
+    VT_ELIM_SEL.push(uid);
+  }
+  renderElim();
+}
+
+function renderElimVT(){
+  const el=document.getElementById('elim-vt-body');
+  if(!el) return;
+  const parts=DB.participantes.filter(p=>VT_ELIM_SEL.includes(p.id)&&Object.keys(DB.pronosticosElim?.[p.id]||{}).length>0);
+  if(parts.length===0){
+    el.innerHTML='<div class="alert a-info">Selecciona al menos un participante para comparar.</div>';
+    return;
+  }
+  const resElim=DB.resultadosElim||{};
+  const equiposAdmin=DB.equiposElim||{};
+  let h='';
+
+  RONDAS.forEach(ronda=>{
+    const es16=ronda.id==='r16';
+    h+=`<div class="card" style="margin-bottom:10px">
+      <div class="ct">${ronda.label}</div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">`;
+
+    if(es16){
+      // ── 16avos: filas=partidos, columnas=participantes ──
+      h+=`<table style="min-width:300px;font-size:11px">
+        <thead><tr>
+          <th style="text-align:left;min-width:90px">Partido</th>
+          <th style="text-align:center;background:var(--azul-cl);color:#1e40af;white-space:nowrap;min-width:44px">Real</th>
+          ${parts.map(p=>`<th colspan="2" style="text-align:center;font-size:10px;white-space:nowrap">${escHtml(abreviarNombre(p.nombre))}</th>`).join('')}
+        </tr><tr>
+          <th></th><th></th>
+          ${parts.map(()=>'<th style="font-size:9px;color:#6b7280;text-align:center">Marc.</th><th style="font-size:9px;color:#6b7280;text-align:center">Pasa</th>').join('')}
+        </tr></thead><tbody>`;
+      for(let i=1;i<=ronda.n;i++){
+        const pid=ronda.id+'_'+i;
+        const eq=equiposAdmin[pid]||{};
+        const re=resElim[pid]||{};
+        const tieneReal=re.g1!==undefined&&re.g1!=='';
+        h+=`<tr>
+          <td style="font-size:10px;white-space:nowrap">${eq.local&&eq.vis?eq.local+' — '+eq.vis:'Partido '+i}</td>
+          <td style="text-align:center;background:var(--azul-cl);font-weight:700;white-space:nowrap;font-size:10px">${tieneReal?re.g1+'-'+re.g2:'—'}</td>`;
+        parts.forEach(part=>{
+          const pr=(DB.pronosticosElim?.[part.id]||{})[pid]||{};
+          const tieneP=pr.g1!==undefined&&pr.g1!=='';
+          let colorM='#374151',colorG='#374151';
+          if(tieneReal&&tieneP){
+            const pg1=+pr.g1,pg2=+pr.g2,rg1=+re.g1,rg2=+re.g2;
+            if(pg1===rg1&&pg2===rg2) colorM='#1b4332';
+            else if(signo(pg1,pg2)===signo(rg1,rg2)) colorM='#1e40af';
+            else colorM='#c0392b';
+          }
+          if(re.ganador&&pr.ganador) colorG=pr.ganador===re.ganador?'#1b4332':'#c0392b';
+          h+=`<td style="text-align:center;font-size:10px;font-weight:600;color:${colorM}">${tieneP?pr.g1+'-'+pr.g2:'—'}</td>`;
+          h+=`<td style="text-align:center;font-size:10px;font-weight:600;color:${colorG};white-space:nowrap">${pr.ganador||'—'}</td>`;
+        });
+        h+='</tr>';
+      }
+      h+=`</tbody></table>`;
+
+    } else {
+      // ── Octavos en adelante: filas=participantes, columnas=partidos ──
+      const esFinal=ronda.id==='r2'||ronda.id==='rfin';
+      h+=`<table style="font-size:11px">
+        <thead><tr>
+          <th style="text-align:left;min-width:80px" rowspan="2">Participante</th>`;
+      for(let i=1;i<=ronda.n;i++){
+        h+=`<th colspan="3" style="text-align:center;background:var(--azul-cl);color:#1e40af;font-size:10px">Partido ${i}</th>`;
+      }
+      h+=`</tr><tr>`;
+      for(let i=1;i<=ronda.n;i++){
+        h+=`<th style="font-size:9px;color:#6b7280;text-align:center">Equipos</th>
+            <th style="font-size:9px;color:#6b7280;text-align:center">Marc.</th>
+            <th style="font-size:9px;color:#6b7280;text-align:center">${ronda.id==='rfin'?'Campeón':'Pasa'}</th>`;
+      }
+      h+=`</tr></thead><tbody>`;
+      parts.forEach(part=>{
+        h+=`<tr><td style="font-size:10px;font-weight:700;white-space:nowrap">${escHtml(abreviarNombre(part.nombre))}</td>`;
+        for(let i=1;i<=ronda.n;i++){
+          const pid=ronda.id+'_'+i;
+          const pr=(DB.pronosticosElim?.[part.id]||{})[pid]||{};
+          const re=resElim[pid]||{};
+          const tieneP=pr.g1!==undefined&&pr.g1!=='';
+          const tieneReal=re.g1!==undefined&&re.g1!=='';
+          const equiposPron=pr.local&&pr.vis?pr.local+'-'+pr.vis:'—';
+          const marc=tieneP?pr.g1+'-'+pr.g2:'—';
+          const pasa=pr.ganador||'—';
+          let colorM='#374151',colorG='#374151';
+          if(tieneReal&&tieneP){
+            const eq=equiposAdmin[pid]||{};
+            const pg1=+pr.g1,pg2=+pr.g2,rg1=+re.g1,rg2=+re.g2;
+            const coinc=pr.local===eq.local&&pr.vis===eq.vis;
+            if(coinc){
+              if(pg1===rg1&&pg2===rg2) colorM='#1b4332';
+              else if(signo(pg1,pg2)===signo(rg1,rg2)) colorM='#1e40af';
+              else colorM='#c0392b';
+            }
+          }
+          if(re.ganador&&pr.ganador) colorG=pr.ganador===re.ganador?'#1b4332':'#c0392b';
+          h+=`<td style="text-align:center;font-size:10px;white-space:nowrap">${equiposPron}</td>`;
+          h+=`<td style="text-align:center;font-size:10px;font-weight:700;color:${colorM}">${marc}</td>`;
+          h+=`<td style="text-align:center;font-size:10px;font-weight:700;color:${colorG};white-space:nowrap">${pasa}</td>`;
+        }
+        h+='</tr>';
+      });
+      // ── Fila REAL destacada ──
+      const hayAlgunReal=Array.from({length:ronda.n},(_,i)=>ronda.id+'_'+(i+1))
+        .some(pid=>{const re=resElim[pid]||{};return re.g1!==undefined&&re.g1!=='';});
+      if(hayAlgunReal){
+        h+=`<tr style="background:var(--azul-cl);border-top:2px solid var(--azul2)">
+          <td style="font-size:10px;font-weight:900;color:#1e40af;white-space:nowrap">🔵 REAL</td>`;
+        for(let i=1;i<=ronda.n;i++){
+          const pid=ronda.id+'_'+i;
+          const eq=equiposAdmin[pid]||{};
+          const re=resElim[pid]||{};
+          const tieneReal=re.g1!==undefined&&re.g1!=='';
+          const equiposReal=eq.local&&eq.vis?eq.local+'-'+eq.vis:'—';
+          const marcReal=tieneReal?re.g1+'-'+re.g2:'—';
+          const pasaReal=re.ganador||'—';
+          h+=`<td style="text-align:center;font-size:10px;font-weight:600;color:#1e40af;white-space:nowrap">${equiposReal}</td>`;
+          h+=`<td style="text-align:center;font-size:10px;font-weight:700;color:#1e40af">${marcReal}</td>`;
+          h+=`<td style="text-align:center;font-size:10px;font-weight:700;color:#1b4332;white-space:nowrap">${pasaReal}</td>`;
+        }
+        h+='</tr>';
+      }
+      h+=`</tbody></table>`;
+    }
+    h+=`</div></div>`;
+  });
+  el.innerHTML=h;
 }
 
 // ── ADMIN ELIMINATORIAS ──
@@ -1850,7 +2103,7 @@ function renderAdminElim(){
 
 async function toggleBracket(btnEl){
   DB.bracketAbierto=!DB.bracketAbierto;
-  await guardarDatos(btnEl);renderAdmin();
+  await guardarMeta(btnEl);renderAdmin();
   toast(DB.bracketAbierto?'✓ Pronósticos abiertos':'Pronósticos cerrados','verde');
 }
 
@@ -1908,10 +2161,10 @@ function adminElimRonda(rid,btn){
       <div class="match-row" style="margin-bottom:8px">
         <span class="eq r">${e.local||'Local'}</span>
         <input class="sinp" type="number" min="0" max="20" value="${re.g1??''}"
-          onchange="setResElimA('${pid}','g1',this.value,'${rid}')">
+          oninput="setResElimA('${pid}','g1',this.value,'${rid}')">
         <span class="sdash">—</span>
         <input class="sinp" type="number" min="0" max="20" value="${re.g2??''}"
-          onchange="setResElimA('${pid}','g2',this.value,'${rid}')">
+          oninput="setResElimA('${pid}','g2',this.value,'${rid}')">
         <span class="eq">${e.vis||'Visitante'}</span>
       </div>`;
     // Ganador: auto si marcador sin empate, botones solo si empate (penales)
@@ -1979,7 +2232,7 @@ async function guardarEquipos16(btnEl){
     }
   }
   propagarFixture('equipos');
-  const ok=await guardarDatos(btnEl);
+  const ok=await guardarResElim(btnEl);
   if(ok){
     adminElimRonda('r16',null); // re-renderizar con nombres actualizados
     toast('✓ Equipos guardados y visibles para todos los participantes.','verde');
@@ -2003,10 +2256,16 @@ function setResElimA(pid,campo,val,rid){
   const eq=DB.equiposElim?.[pid]||{};
   if(re.g1!==undefined&&re.g1!==''&&re.g2!==undefined&&re.g2!==''){
     const g1=+re.g1,g2=+re.g2;
-    if(g1!==g2) re.ganador=g1>g2?eq.local:eq.vis;
-    // Si empate, no auto-asignar — admin debe elegir manualmente quién pasó
+    if(g1!==g2){
+      re.ganador=g1>g2?eq.local:eq.vis;
+    } else {
+      // Empate: limpiar ganador para forzar elección manual
+      delete re.ganador;
+    }
   }
   propagarFixture('equipos');
+  // Re-renderizar para mostrar ganador automático o botones de penales
+  adminElimRonda(rid,null);
 }
 
 function setGanadorElimA(pid,lv,rid){
@@ -2022,7 +2281,7 @@ function setGanadorElimA(pid,lv,rid){
 
 async function guardarElimA(rid,btnEl){
   propagarFixture('equipos');
-  const ok=await guardarDatos(btnEl);
+  const ok=await guardarResElim(btnEl);
   renderRanking();
   toast(ok?'✓ Guardado y fixture actualizado':'⚠ Error',ok?'verde':'rojo');
 }
@@ -2054,26 +2313,13 @@ async function resetearElim(){
 
 // ── GENERAR PDF ──
 function generarPDFElim(){
-  const todos=DB.participantes;
+  const todos=DB.participantes.filter(p=>Object.keys(DB.pronosticosElim?.[p.id]||{}).length>0);
+  if(!todos.length){toast('No hay pronósticos eliminatorios para generar el PDF','ambar');return;}
   const BLOQUE=10;
   const fecha=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'});
-  const equipos=DB.equiposElim||{};
-  const resElim=DB.resultadosElim||{};
+  const equiposAdmin=DB.equiposElim||{};
   const bloques=[];
   for(let i=0;i<todos.length;i+=BLOQUE) bloques.push(todos.slice(i,i+BLOQUE));
-
-  // Helper: obtener equipo pronosticado para un participante en un partido
-  function getPronPart(uid,pid){
-    const pr=(DB.pronosticosElim?.[uid]||{})[pid]||{};
-    const eq=equipos[pid]||{};
-    return{
-      local: pr.local||eq.local||'',
-      vis:   pr.vis  ||eq.vis  ||'',
-      g1:    pr.g1??'',
-      g2:    pr.g2??'',
-      ganador: pr.ganador||''
-    };
-  }
 
   let contenido='';
 
@@ -2090,34 +2336,74 @@ function generarPDFElim(){
     </div>`;
 
     RONDAS.forEach(ronda=>{
-      contenido+=`<div class="grupo-block">
-        <h3>${ronda.label}</h3>
-        <table><thead><tr>
-          <th class="partido-col">Partido</th>
-          ${bloque.map(p=>`<th colspan="2">${abreviarNombre(p.nombre)}</th>`).join('')}
-        </tr>
-        <tr>
-          <th></th>
-          ${bloque.map(()=>'<th class="sub-th">Marcador</th><th class="sub-th">Pasa</th>').join('')}
-        </tr></thead><tbody>`;
+      // Estructura diferente según ronda:
+      // 16avos: partido compartido (mismo para todos) + columna por participante
+      // Rondas siguientes: cada participante tiene su propio partido
+      const es16avos = ronda.id==='r16';
 
-      for(let i=1;i<=ronda.n;i++){
-        const pid=ronda.id+'_'+i;
-        const eq=equipos[pid]||{};
-        const tieneEq=eq.local&&eq.vis;
+      if(es16avos){
+        // ── 16avos: tabla con partido compartido ──
+        contenido+=`<div class="grupo-block">
+          <h3>${ronda.label}</h3>
+          <table><thead><tr>
+            <th class="partido-col">Partido (igual para todos)</th>
+            ${bloque.map(p=>`<th colspan="2">${abreviarNombre(p.nombre)}</th>`).join('')}
+          </tr><tr>
+            <th></th>
+            ${bloque.map(()=>'<th class="sub-th">Marcador</th><th class="sub-th">Pasa</th>').join('')}
+          </tr></thead><tbody>`;
 
-        contenido+=`<tr>
-          <td class="partido-col">${tieneEq?eq.local+' — '+eq.vis:'Partido '+i}</td>`;
+        for(let i=1;i<=ronda.n;i++){
+          const pid=ronda.id+'_'+i;
+          const eq=equiposAdmin[pid]||{};
+          contenido+=`<tr>
+            <td class="partido-col">${eq.local&&eq.vis?eq.local+' — '+eq.vis:'Partido '+i}</td>`;
+          bloque.forEach(part=>{
+            const pr=(DB.pronosticosElim?.[part.id]||{})[pid]||{};
+            const tieneP=pr.g1!==undefined&&pr.g1!=='';
+            contenido+=`<td style="color:#111;font-weight:600;text-align:center">${tieneP?pr.g1+'-'+pr.g2:'—'}</td>`;
+            contenido+=`<td style="color:#111;font-weight:600;text-align:center;font-size:7px;white-space:nowrap">${pr.ganador||'—'}</td>`;
+          });
+          contenido+='</tr>';
+        }
+        contenido+=`</tbody></table></div>`;
+
+      } else {
+        // ── Rondas siguientes: formato Excel ──
+        // Fila 1: Participante | Partido 1 (colspan 3) | Partido 2 (colspan 3) | ...
+        // Fila 2:              | Equipos | Marcador | Pasa | Equipos | Marcador | Pasa | ...
+        // Fila datos: Juan | Brasil-Argentina | 2-1 | Brasil | México-Colombia | 1-0 | México | ...
+        contenido+=`<div class="grupo-block">
+          <h3>${ronda.label}</h3>
+          <table><thead>
+            <tr>
+              <th class="part-col" rowspan="2">Participante</th>`;
+        for(let i=1;i<=ronda.n;i++){
+          contenido+=`<th colspan="3" class="match-header">Partido ${i}</th>`;
+        }
+        contenido+=`</tr><tr>`;
+        for(let i=1;i<=ronda.n;i++){
+          contenido+=`<th class="sub-th">Equipos</th><th class="sub-th">Marcador</th><th class="sub-th">${ronda.id==='rfin'?'Campeón':'Pasa'}</th>`;
+        }
+        contenido+=`</tr></thead><tbody>`;
 
         bloque.forEach(part=>{
-          const pr=getPronPart(part.id,pid);
-          const tieneP=pr.g1!==''&&pr.g2!=='';
-          contenido+=`<td style="color:#111;font-weight:600;text-align:center">${tieneP?pr.g1+'-'+pr.g2:'—'}</td>`;
-          contenido+=`<td style="color:#111;font-weight:600;text-align:center;font-size:7px;white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis">${pr.ganador||'—'}</td>`;
+          contenido+=`<tr><td class="part-col">${abreviarNombre(part.nombre)}</td>`;
+          for(let i=1;i<=ronda.n;i++){
+            const pid=ronda.id+'_'+i;
+            const pr=(DB.pronosticosElim?.[part.id]||{})[pid]||{};
+            const tieneP=pr.g1!==undefined&&pr.g1!=='';
+            const equipos=pr.local&&pr.vis?pr.local+'-'+pr.vis:'—';
+            const marc=tieneP?pr.g1+'-'+pr.g2:'—';
+            const pasa=pr.ganador||'—';
+            contenido+=`<td style="text-align:center;white-space:nowrap">${equipos}</td>`;
+            contenido+=`<td style="text-align:center;font-weight:700">${marc}</td>`;
+            contenido+=`<td style="text-align:center;color:#1b4332;font-weight:700;white-space:nowrap">${pasa}</td>`;
+          }
+          contenido+='</tr>';
         });
-        contenido+='</tr>';
+        contenido+=`</tbody></table></div>`;
       }
-      contenido+=`</tbody></table></div>`;
     });
 
     if(!esUltimo) contenido+='<div class="salto-pagina"></div>';
@@ -2138,20 +2424,17 @@ function generarPDFElim(){
       .participantes-lista{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;padding:5px;background:#f3f4f6;border-radius:4px}
       .part-chip{font-size:8px;font-weight:600;color:#1d3557;background:#dbeafe;padding:2px 6px;border-radius:99px}
       .part-idx{color:#6b7280;font-weight:400}
-      .grupo-block{margin-bottom:6px;break-inside:avoid}
-      h3{font-size:9px;font-weight:700;color:#1d3557;background:#dbeafe;padding:3px 6px;border-radius:3px 3px 0 0}
+      .grupo-block{margin-bottom:8px;break-inside:avoid}
+      h3{font-size:9px;font-weight:700;color:#1d3557;background:#dbeafe;padding:3px 6px;border-radius:3px 3px 0 0;margin-bottom:0}
       table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb}
       th{background:#f3f4f6;padding:2px 3px;text-align:center;font-size:7px;font-weight:700;color:#374151;border:1px solid #e5e7eb;white-space:nowrap}
-      td{padding:2px 3px;font-size:7px;border:1px solid #e5e7eb}
+      td{padding:2px 3px;font-size:7px;border:1px solid #e5e7eb;text-align:center}
       .partido-col{text-align:left!important;white-space:nowrap;min-width:80px}
-      .real-col{background:#dbeafe;font-weight:700;color:#1e40af;text-align:center}
-      .gan-col{background:#d8f3dc;font-weight:700;color:#1b4332;text-align:center;font-size:7px;white-space:nowrap;max-width:55px;overflow:hidden;text-overflow:ellipsis}
+      .part-col{text-align:left!important;white-space:nowrap;min-width:70px;font-weight:700;background:#f8fafc}
+      .match-header{background:#eff6ff;color:#1e40af}
       .sub-th{font-size:6px;font-weight:600;color:#6b7280}
       tr:nth-child(even){background:#f9fafb}
       .salto-pagina{break-after:page;height:0}
-      .leyenda{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;font-size:7px;padding-top:6px;border-top:1px solid #e5e7eb}
-      .leyenda-item{display:flex;align-items:center;gap:3px}
-      .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
       @media print{
         body{padding:5px}
         .no-print{display:none!important}
@@ -2160,7 +2443,7 @@ function generarPDFElim(){
     </style>
   </head><body>
     <h1>⚽ Polla Mundial FIFA 2026 — Pronósticos Eliminación Directa</h1>
-    <div class="subtitulo">Generado el ${fecha} · ${todos.length} participantes · bloques de hasta ${BLOQUE}</div>
+    <div class="subtitulo">Generado el ${fecha} · ${todos.length} participantes con pronósticos · bloques de hasta ${BLOQUE}</div>
     ${contenido}
     <div class="no-print" style="margin-top:12px;text-align:center">
       <button onclick="window.print()" style="background:#1d3557;color:#fff;border:none;padding:9px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar como PDF</button>
@@ -2433,7 +2716,7 @@ async function cambiarPassParticipante(){
 
   // Guardar nueva contraseña
   p.passHash=await hash(nueva);
-  const ok=await guardarDatos();
+  const ok=await guardarPron(UID);
   cerrarModal('modal-cambiar-pass');
   limpiarFormCambiarPass();
   toast(ok?'✓ Contraseña actualizada correctamente':'⚠ Error al guardar. Intenta de nuevo.',ok?'verde':'rojo');
@@ -2481,6 +2764,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
