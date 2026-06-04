@@ -268,7 +268,7 @@ const AVC=[
   ['#e0f2fe','#0c4a6e'],['#dcfce7','#166534'],['#fef9c3','#713f12']
 ];
 
-let DB={participantes:[],pronosticos:{},resultados:{},adminPass:'admin2026'};
+let DB={participantes:[],pronosticos:{},resultados:{},resultadosElim:{},equiposElim:{},pronosticosElim:{},bracketAbierto:false,adminPass:'admin2026'};
 let UID=null, ADMIN=false;
 let VT_SELECCIONADOS=[]; // participantes seleccionados en Ver Todos (máx 4)
 let VT_ELIM_SEL=[];      // participantes seleccionados en Comparar brackets elim (máx 4)
@@ -388,14 +388,13 @@ async function guardarResElim(btnEl){
   }, btnEl);
 }
 
-// Guardar metadatos (participantes, config, equipos elim)
+// Guardar metadatos (participantes, config admin) — NO incluye equiposElim para evitar sobreescritura
 async function guardarMeta(btnEl){
   return _post({
     action:'setMeta',
     participantes: DB.participantes,
     adminPass: DB.adminPass,
-    bracketAbierto: DB.bracketAbierto,
-    equiposElim: DB.equiposElim
+    bracketAbierto: DB.bracketAbierto
   }, btnEl);
 }
 
@@ -483,6 +482,9 @@ function cerrarSesion(){
   UID=null; ADMIN=false;
   localStorage.removeItem('p26_uid');
   localStorage.removeItem('p26_admin');
+  // Limpiar header antes de mostrar login
+  const el=document.getElementById('huser');
+  if(el) el.innerHTML='';
   mostrarLogin();
 }
 
@@ -2167,8 +2169,7 @@ function adminElimRonda(rid,btn){
           oninput="setResElimA('${pid}','g2',this.value,'${rid}')">
         <span class="eq">${e.vis||'Visitante'}</span>
       </div>`;
-    // Ganador: auto si marcador sin empate, botones solo si empate (penales)
-    const tieneResultado=re.g1!==undefined&&re.g1!==''&&re.g2!==undefined&&re.g2!=='';
+    h+=`<div id="ganador-admin-${pid}">`;
     const esEmpate=tieneResultado&&+re.g1===+re.g2;
     if(tieneResultado&&!esEmpate){
       // Ganador automático — solo mostrar quién pasa, sin botones
@@ -2189,7 +2190,8 @@ function adminElimRonda(rid,btn){
       // Sin resultado aún — mostrar botones deshabilitados
       h+=`<div style="font-size:11px;color:var(--gris);margin-top:4px;font-style:italic">El ganador se asignará automáticamente al ingresar el marcador.</div>`;
     }
-    h+=`</div>`;
+    h+=`</div>`; // cierra ganador-admin-${pid}
+    h+=`</div>`; // cierra card partido
   }
 
   // Botón guardar al final (solo resultados, no equipos de 16avos)
@@ -2251,7 +2253,6 @@ function setResElimA(pid,campo,val,rid){
   if(!DB.resultadosElim)DB.resultadosElim={};
   if(!DB.resultadosElim[pid])DB.resultadosElim[pid]={};
   DB.resultadosElim[pid][campo]=val;
-  // Auto-asignar ganador si marcador sin empate
   const re=DB.resultadosElim[pid];
   const eq=DB.equiposElim?.[pid]||{};
   if(re.g1!==undefined&&re.g1!==''&&re.g2!==undefined&&re.g2!==''){
@@ -2259,13 +2260,44 @@ function setResElimA(pid,campo,val,rid){
     if(g1!==g2){
       re.ganador=g1>g2?eq.local:eq.vis;
     } else {
-      // Empate: limpiar ganador para forzar elección manual
       delete re.ganador;
     }
   }
   propagarFixture('equipos');
-  // Re-renderizar para mostrar ganador automático o botones de penales
-  adminElimRonda(rid,null);
+  // Actualizar solo la sección de ganador de este partido sin re-renderizar todo
+  actualizarGanadorAdmin(pid,rid);
+}
+
+// Actualiza solo la sección "¿Quién avanza?" de un partido sin mover el scroll
+function actualizarGanadorAdmin(pid,rid){
+  const ganadorEl=document.getElementById('ganador-admin-'+pid);
+  if(!ganadorEl){
+    // Si no existe el elemento (primera vez), hacer re-render completo
+    adminElimRonda(rid,null);
+    return;
+  }
+  const re=DB.resultadosElim?.[pid]||{};
+  const eq=DB.equiposElim?.[pid]||{};
+  const tieneResultado=re.g1!==undefined&&re.g1!==''&&re.g2!==undefined&&re.g2!=='';
+  const esEmpate=tieneResultado&&+re.g1===+re.g2;
+  let h='';
+  if(tieneResultado&&!esEmpate){
+    h=`<div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+      <span style="font-size:12px;color:var(--gris);font-weight:600">Avanza automáticamente:</span>
+      <span class="badge b-verde" style="font-size:12px">${re.ganador||'—'} ✓</span>
+    </div>`;
+  } else if(esEmpate){
+    h=`<div class="lbl" style="margin-bottom:5px;color:var(--ambar)">Empate — ¿Quién avanzó por penales?</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn ${re.ganador===eq.local&&eq.local?'btn-verde':'btn-gris'}" style="font-size:12px;padding:5px 12px"
+        onclick="setGanadorElimA('${pid}','L','${rid}')">${eq.local||'Local'} ${re.ganador===eq.local&&eq.local?'✓ pasa':''}</button>
+      <button class="btn ${re.ganador===eq.vis&&eq.vis?'btn-verde':'btn-gris'}" style="font-size:12px;padding:5px 12px"
+        onclick="setGanadorElimA('${pid}','V','${rid}')">${eq.vis||'Visitante'} ${re.ganador===eq.vis&&eq.vis?'✓ pasa':''}</button>
+    </div>`;
+  } else {
+    h=`<div style="font-size:11px;color:var(--gris);margin-top:4px;font-style:italic">El ganador se asignará automáticamente al ingresar el marcador.</div>`;
+  }
+  ganadorEl.innerHTML=h;
 }
 
 function setGanadorElimA(pid,lv,rid){
@@ -2748,7 +2780,7 @@ function actualizarHeader(){
   if(!UID){el.innerHTML='';return;}
   const p=DB.participantes.find(x=>x.id===UID);if(!p){el.innerHTML='';return;}
   const [bg,fg]=avc(p.id);
-  const cambiarBtn='<button onclick="abrirModal(\'modal-cambiar-pass\')" title="Cambiar contraseña" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;margin-left:4px">🔑</button>';
+  const cambiarBtn='<button onclick="abrirModal(\'modal-cambiar-pass\')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;margin-left:4px">🔑 Cambiar contraseña</button>';
   el.innerHTML='<div class="av" style="width:26px;height:26px;font-size:11px;background:'+bg+';color:'+fg+'">'+inic(p.nombre)+'</div><span>'+escHtml(p.nombre.split(' ')[0])+'</span>'+cambiarBtn+salirBtn;
 }
 let _tt;
@@ -2764,6 +2796,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
