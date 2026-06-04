@@ -1575,7 +1575,7 @@ function renderElim(){
   const equipos=DB.equiposElim||{};
   const tieneEq=Object.keys(equipos).filter(k=>k.startsWith('r16_')).length>=1;
 
-  // Sin equipos configurados → mensaje genérico
+  // Sin equipos configurados → mensaje genérico (admin ve igual)
   if(!tieneEq){
     el.innerHTML=`<div class="card"><div class="ct">🔥 Fase eliminatoria</div>
       <div class="alert a-info">El administrador aún no ha configurado el bracket de 16avos. Estará disponible cuando termine la fase de grupos.</div></div>`;
@@ -1583,34 +1583,33 @@ function renderElim(){
   }
 
   // Verificar si el participante ya tiene pronósticos guardados
-  const tienePron=Object.keys(DB.pronosticosElim?.[UID]||{}).length>0;
+  const tienePron=ADMIN||Object.keys(DB.pronosticosElim?.[UID]||{}).length>0;
 
-  // Sin pronósticos y bracket cerrado → mensaje informativo
-  if(!abierto&&!tienePron){
+  // Sin pronósticos y bracket cerrado → mensaje informativo (solo para participantes)
+  if(!ADMIN&&!abierto&&!tienePron){
     el.innerHTML=`<div class="card"><div class="ct">🔥 Fase eliminatoria</div>
       <div class="alert a-info">El administrador aún no ha abierto los pronósticos eliminatorios.</div></div>`;
     return;
   }
 
   const p=DB.participantes.find(x=>x.id===UID);
-  const locked=!!p.bloqueadoElim;
+  const locked=!ADMIN&&!!p?.bloqueadoElim;
   const todosEnviaron=DB.participantes.length>0&&DB.participantes.every(x=>x.bloqueadoElim);
 
-  // Propagar fixture solo si el bracket está abierto y no está bloqueado
-  if(abierto&&!locked) propagarFixture('pron', UID);
-
+  if(abierto&&!locked&&!ADMIN) propagarFixture('pron', UID);
   const pron=DB.pronosticosElim?.[UID]||{};
 
   let h='';
-  if(!abierto){
-    // Bracket cerrado pero participante tiene pronósticos → mostrar con aviso
-    h+=`<div class="alert a-warn" style="margin-bottom:8px">🔒 Los pronósticos eliminatorios están cerrados. Solo puedes consultar tu bracket.</div>`;
-  } else if(locked){
-    h+=`<div class="locked">🔒 Tu bracket eliminatorio está enviado.
-        <button class="btn btn-gris" style="font-size:11px;padding:3px 10px;margin-left:8px" onclick="reabrirElim()">✏️ Modificar</button>
-      </div>`;
-  } else {
-    h+='<div class="alert a-warn">Llena tu bracket completo. Al enviar quedará <strong>bloqueado definitivamente</strong>.</div>';
+  if(!ADMIN){
+    if(!abierto){
+      h+=`<div class="alert a-warn" style="margin-bottom:8px">🔒 Los pronósticos eliminatorios están cerrados. Solo puedes consultar tu bracket.</div>`;
+    } else if(locked){
+      h+=`<div class="locked">🔒 Tu bracket eliminatorio está enviado.
+          <button class="btn btn-gris" style="font-size:11px;padding:3px 10px;margin-left:8px" onclick="reabrirElim()">✏️ Modificar</button>
+        </div>`;
+    } else {
+      h+='<div class="alert a-warn">Llena tu bracket completo. Al enviar quedará <strong>bloqueado definitivamente</strong>.</div>';
+    }
   }
 
   // Botón PDF para admin — aparece cuando hay al menos un participante con pronósticos
@@ -1621,12 +1620,14 @@ function renderElim(){
     </div>`;
   }
 
-  // Bracket del participante
-  h+=`<div class="gtabs" id="elim-tabs">`;
-  RONDAS.forEach((r,i)=>{
-    h+='<button class="gtab '+(i===0?'active':'')+'" id="etabu-'+r.id+'" onclick="elimTabU(\''+r.id+'\',this)">'+r.label.split(' ')[0]+'</button>';
-  });
-  h+=`</div><div id="elim-ronda-body"></div>`;
+  // Bracket del participante (no aplica para admin)
+  if(!ADMIN){
+    h+=`<div class="gtabs" id="elim-tabs">`;
+    RONDAS.forEach((r,i)=>{
+      h+='<button class="gtab '+(i===0?'active':'')+'" id="etabu-'+r.id+'" onclick="elimTabU(\''+r.id+'\',this)">'+r.label.split(' ')[0]+'</button>';
+    });
+    h+=`</div><div id="elim-ronda-body"></div>`;
+  }
 
   // ── Sección "Comparar brackets" ──
   // Inicializar selección para eliminatorias (independiente de VT_SELECCIONADOS de grupos)
@@ -1661,7 +1662,7 @@ function renderElim(){
   }
 
   el.innerHTML=h;
-  elimTabU('r16',null);
+  if(!ADMIN) elimTabU('r16',null);
   if(partsConPron.length>0) renderElimVT();
 }
 
@@ -2789,6 +2790,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
