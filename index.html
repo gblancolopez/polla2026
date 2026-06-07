@@ -329,7 +329,7 @@ async function cargarDatos(){
   }
 }
 
-// ── GUARDADO GRANULAR (evita sobreescritura entre participantes) ──
+// ── GUARDADO GRANULAR (usa GET para evitar CORS con Apps Script) ──
 async function _post(body, btnEl){
   localStorage.setItem('p26_db', JSON.stringify(DB));
   const saveSpinner=document.getElementById('save-spinner');
@@ -337,9 +337,11 @@ async function _post(body, btnEl){
   if(saveSpinner) saveSpinner.style.display='flex';
   if(btnEl){btnOrigText=btnEl.innerHTML;btnOrigDisabled=btnEl.disabled;btnEl.innerHTML='⏳ Guardando...';btnEl.disabled=true;}
   try{
-    const r=await fetch(BURL,{method:'POST',redirect:'follow',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify(body)});
+    // Usar GET con payload para evitar bloqueo CORS en POST cross-origin
+    const action=body.action||'setData';
+    const payload=encodeURIComponent(JSON.stringify(body));
+    const url=BURL+'?action='+action+'&payload='+payload;
+    const r=await fetch(url,{redirect:'follow'});
     const j=await r.json();
     return !!j.ok;
   }catch(e){return false;}
@@ -2790,6 +2792,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
