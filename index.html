@@ -396,8 +396,7 @@ async function guardarMeta(btnEl){
     action:'setMeta',
     participantes: DB.participantes,
     adminPass: DB.adminPass,
-    bracketAbierto: DB.bracketAbierto,
-    equiposElim: DB.equiposElim
+    bracketAbierto: DB.bracketAbierto
   }, btnEl);
 }
 
@@ -1352,7 +1351,7 @@ async function addP(){
   document.getElementById('np-n').value='';
   document.getElementById('np-e').value='';
   document.getElementById('np-p').value='';
-  await guardarDatos(); renderAPLista(); renderRanking();
+  await guardarMeta(); renderAPLista(); renderRanking();
   errEl.className='alert a-ok';
   errEl.innerHTML='✓ Añadido. Comparte con '+escHtml(nombre)+':<br><strong>Email:</strong> '+escHtml(email)+' &nbsp; <strong>Contraseña:</strong> '+escHtml(pass);
   errEl.style.display='block';
@@ -1373,7 +1372,7 @@ async function cambiarPassAdmin(){
   const msgEl=document.getElementById('apass-change-msg');
   if(np.length<4){msgEl.className='alert a-err';msgEl.textContent='Mínimo 4 caracteres';msgEl.style.display='block';return;}
   DB.adminPass=np;
-  const ok=await guardarDatos();
+  const ok=await guardarMeta();
   msgEl.className=ok?'alert a-ok':'alert a-warn';
   msgEl.textContent=ok?'✓ Contraseña de admin actualizada. Próximo login usa la nueva.':' ⚠ Error guardando';
   msgEl.style.display='block';
@@ -1384,13 +1383,13 @@ async function delP(uid){
   if(!confirm('¿Eliminar participante y todos sus pronósticos?')) return;
   DB.participantes=DB.participantes.filter(p=>p.id!==uid);
   delete DB.pronosticos[uid];
-  await guardarDatos(); renderAPLista(); renderRanking();
+  await guardarMeta(); renderAPLista(); renderRanking();
 }
 
 async function desblq(uid){
   if(!confirm('¿Permitir que este participante modifique sus pronósticos?')) return;
   const p=DB.participantes.find(x=>x.id===uid);
-  if(p){p.bloqueado=false;await guardarDatos();renderAPLista();}
+  if(p){p.bloqueado=false;await guardarMeta();renderAPLista();}
 }
 
 function adminG(g,btn){
@@ -2792,6 +2791,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
