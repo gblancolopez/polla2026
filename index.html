@@ -369,15 +369,38 @@ async function _post(body, btnEl){
   }
 }
 
-// Guardar pronósticos de un participante (solo sus datos)
+// Guardar pronósticos de un participante grupo por grupo para evitar URLs largas
 async function guardarPron(uid, btnEl){
   const p=DB.participantes.find(x=>x.id===uid);
-  return _post({
-    action:'setPron', uid,
-    pron: DB.pronosticos[uid]||{},
+  const grupos=Object.keys(DB.pronosticos[uid]||{}).filter(g=>g!=='__orden__');
+  
+  // Primero guardar el estado bloqueado y passHash via setMeta liviano
+  const metaOk=await _post({
+    action:'setPronMeta', uid,
     bloqueado: p?.bloqueado,
     passHash: p?.passHash
-  }, btnEl);
+  }, null);
+
+  // Luego guardar cada grupo individualmente
+  let allOk=metaOk;
+  for(const g of Object.keys(GRUPOS)){
+    const pronG=DB.pronosticos[uid]?.[g]||{};
+    const ordenG=DB.pronosticos[uid]?.['__orden__']?.[g];
+    const ok=await _post({
+      action:'setPronGrupo', uid, grupo:g,
+      pron: pronG,
+      orden: ordenG
+    }, null);
+    if(!ok) allOk=false;
+  }
+
+  // Mostrar resultado en botón si hay uno
+  if(btnEl){
+    const orig=btnEl.innerHTML;
+    btnEl.innerHTML=allOk?'✓ Guardado':'⚠ Error';
+    setTimeout(()=>btnEl.innerHTML=orig,2000);
+  }
+  return allOk;
 }
 
 // Guardar pronósticos eliminatorios de un participante
@@ -2809,6 +2832,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
