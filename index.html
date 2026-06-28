@@ -1672,40 +1672,69 @@ function renderElim(){
   }
 
   // ── Sección "Comparar brackets" ──
-  // Inicializar selección para eliminatorias (independiente de VT_SELECCIONADOS de grupos)
   VT_ELIM_SEL=VT_ELIM_SEL.filter(id=>DB.participantes.find(p=>p.id===id));
   if(VT_ELIM_SEL.length===0) VT_ELIM_SEL=DB.participantes.slice(0,4).map(p=>p.id);
 
   const partsConPron=DB.participantes.filter(x=>Object.keys(DB.pronosticosElim?.[x.id]||{}).length>0);
+  const todosEnviaronElim=DB.participantes.length>0&&DB.participantes.every(x=>x.bloqueadoElim);
+  const bracketCerrado=!DB.bracketAbierto;
+
+  // Participantes solo ven "Comparar brackets" cuando el bracket está cerrado Y todos enviaron
+  // Admin siempre ve la sección si hay pronósticos
+  const puedeVerComparar=ADMIN||(bracketCerrado&&todosEnviaronElim);
+
   if(partsConPron.length>0){
     h+=`<div style="margin-top:18px">
       <div style="font-size:14px;font-weight:700;color:var(--azul);margin-bottom:10px;display:flex;align-items:center;gap:8px">
         👥 Comparar brackets
         <span style="font-size:11px;font-weight:400;color:var(--gris)">(selecciona hasta 4)</span>
+      </div>`;
+
+    if(!puedeVerComparar){
+      // Mostrar estado de envíos mientras el bracket está abierto
+      const envElim=DB.participantes.filter(p=>p.bloqueadoElim).length;
+      const totElim=DB.participantes.length;
+      h+=`<div class="alert a-info" style="margin-bottom:10px">
+        <strong>Los brackets se revelan cuando el administrador cierre los pronósticos y TODOS hayan enviado.</strong><br>
+        Enviados: ${envElim} de ${totElim}.
       </div>
-      <div class="card" style="margin-bottom:10px">
+      <div class="card">`;
+      DB.participantes.forEach(p=>{
+        const [bg,fg]=avc(p.id);
+        h+=`<div class="rrow">
+          <div class="av" style="width:32px;height:32px;font-size:12px;background:${bg};color:${fg}">${inic(p.nombre)}</div>
+          <div style="flex:1"><div style="font-weight:700;font-size:13px">${escHtml(p.nombre)}</div></div>
+          ${p.bloqueadoElim?'<span class="badge b-verde">✓ Enviado</span>':'<span class="badge b-rojo">Pendiente</span>'}
+        </div>`;
+      });
+      h+=`</div>`;
+    } else {
+      // Bracket cerrado y todos enviaron (o admin) — mostrar selector y tablas
+      if(todosEnviaronElim&&!ADMIN) h+=`<div class="alert a-ok" style="margin-bottom:10px">✓ Todos han enviado su bracket.</div>`;
+      h+=`<div class="card" style="margin-bottom:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
           <div style="font-size:12px;color:var(--gris)">${VT_ELIM_SEL.length} seleccionados de ${partsConPron.length}</div>
         </div>
         <div style="max-height:120px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:6px;padding:6px;border:1.5px solid var(--gris-md);border-radius:var(--r-sm);background:var(--gris-cl)">`;
-    partsConPron.forEach(p=>{
-      const sel=VT_ELIM_SEL.includes(p.id);
-      const [bg,fg]=avc(p.id);
-      h+=`<button onclick="toggleElimSel('${p.id}')" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;border:2px solid ${sel?'var(--azul)':'var(--gris-md)'};background:${sel?'var(--azul-cl)':'#fff'};cursor:pointer;font-size:12px;font-weight:${sel?'700':'400'};color:${sel?'var(--azul)':'var(--negro)'};transition:all .15s;white-space:nowrap;flex-shrink:0">
-        <div class="av" style="width:20px;height:20px;font-size:9px;background:${bg};color:${fg};flex-shrink:0">${inic(p.nombre)}</div>
-        ${escHtml(abreviarNombre(p.nombre))}${sel?' ✓':''}
-      </button>`;
-    });
-    h+=`</div>
-        <div style="font-size:10px;color:var(--gris);margin-top:5px;text-align:center">↕ Desliza para ver todos</div>
-      </div>
-      <div id="elim-vt-body"></div>
-    </div>`;
+      partsConPron.forEach(p=>{
+        const sel=VT_ELIM_SEL.includes(p.id);
+        const [bg,fg]=avc(p.id);
+        h+=`<button onclick="toggleElimSel('${p.id}')" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;border:2px solid ${sel?'var(--azul)':'var(--gris-md)'};background:${sel?'var(--azul-cl)':'#fff'};cursor:pointer;font-size:12px;font-weight:${sel?'700':'400'};color:${sel?'var(--azul)':'var(--negro)'};transition:all .15s;white-space:nowrap;flex-shrink:0">
+          <div class="av" style="width:20px;height:20px;font-size:9px;background:${bg};color:${fg};flex-shrink:0">${inic(p.nombre)}</div>
+          ${escHtml(abreviarNombre(p.nombre))}${sel?' ✓':''}
+        </button>`;
+      });
+      h+=`</div>
+          <div style="font-size:10px;color:var(--gris);margin-top:5px;text-align:center">↕ Desliza para ver todos</div>
+        </div>
+        <div id="elim-vt-body"></div>`;
+    }
+    h+=`</div>`;
   }
 
   el.innerHTML=h;
   if(!ADMIN) elimTabU('r16',null);
-  if(partsConPron.length>0) renderElimVT();
+  if(partsConPron.length>0&&puedeVerComparar) renderElimVT();
 }
 
 function elimTabU(rid,btn){
@@ -2832,6 +2861,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
